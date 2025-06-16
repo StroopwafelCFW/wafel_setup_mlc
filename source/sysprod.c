@@ -4,13 +4,32 @@
 #include <stdio.h>  // For snprintf, NULL
 #include <stddef.h> // For ptrdiff_t, size_t
 #include <wafel/services/fsa.h> // For FSA_OpenFile, ReadFile, etc.
-#include <wafel/ios/svc.h>      // For iovec_s, iosIoctlv, (and potentially iosClose if it were used directly here)
+#include <wafel/ios/svc.h>      // For iovec_s, iosIoctlv, iosAlloc, iosFree
 
 // Define a reasonable max size for the XML file.
 #define SYS_PROD_XML_MAX_SIZE (4 * 1024) // 4KB
 
 // Note: Removed static int fsaFd, static int init_fsa(), static void cleanup_fsa()
 // and their forward declarations.
+
+// Helper functions for memory allocation, moved to the top.
+// These are static, so their definitions appearing before use by other functions
+// in this file means forward declarations are not strictly needed within this file.
+static void* allocIobuf(size_t size)
+{
+    void* ptr = iosAlloc(0xCAFF, size); // 0xCAFF is likely a heap ID for IOS
+    if (ptr) {
+        memset(ptr, 0x00, size);
+    }
+    return ptr;
+}
+
+static void freeIobuf(void* ptr)
+{
+	if (ptr) {
+	    iosFree(0xCAFF, ptr);
+	}
+}
 
 // This function is now public (declaration in sysprod.h) and takes fsa_handle.
 int modify_sys_prod_xml(int fsa_handle, int product_area_val, int game_region_val) {
@@ -100,23 +119,6 @@ int modify_sys_prod_xml(int fsa_handle, int product_area_val, int game_region_va
     return result;
 }
 
-// Helper functions for memory allocation, presumably using IOS services
-static void* allocIobuf(size_t size)
-{
-    void* ptr = iosAlloc(0xCAFF, size); // 0xCAFF is likely a heap ID for IOS
-    if (ptr) {
-        memset(ptr, 0x00, size);
-    }
-    return ptr;
-}
-
-static void freeIobuf(void* ptr)
-{
-	if (ptr) {
-	    iosFree(0xCAFF, ptr);
-	}
-}
-
 // MCP functions - MCP_SetSysProdSettings is reverted to its original form
 int MCP_GetSysProdSettings(int fd, MCPSysProdSettings* out_sysProdSettings)
 {
@@ -149,10 +151,6 @@ int MCP_SetSysProdSettings(int fd, const MCPSysProdSettings* sysProdSettings)
         return -1;
     }
 
-    // It's good practice to check sysProdSettings for NULL before dereferencing,
-    // though the original didn't, we'll keep it as per "original form".
-    // If sysProdSettings were NULL, memcpy would crash.
-    // Assuming valid pointer is passed by caller.
     memcpy(&buf[sizeof(iovec_s)], sysProdSettings, sizeof(*sysProdSettings));
 
     iovec_s* vecs = (iovec_s*)buf;
