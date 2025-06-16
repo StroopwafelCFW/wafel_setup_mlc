@@ -8,10 +8,11 @@
 const char* find_tag_value_start(const char* xml_content, const char* tag_name);
 
 // Function to extract the string value of a given tag.
-// Copies the value into `buffer`.
-// Returns `buffer` on success, or NULL if tag not found, value doesn't fit, or other error.
-// Ensures `buffer` is null-terminated (as an empty string if value doesn't fit or on other errors before returning NULL).
-char* get_tag_string(const char* xml_content, const char* tag_name, char* buffer, int buffer_size);
+// Copies the value into `buffer`. `buffer` will be an empty string on error if buffer itself is valid.
+// Returns 0 on success.
+// Returns -1 for general errors (bad parameters, tag not found, malformed XML).
+// Returns -2 if the buffer is too small for the value.
+int get_tag_string(const char* xml_content, const char* tag_name, char* buffer, int buffer_size);
 
 // Function to modify the value of a given tag within mutable XML content.
 // `xml_buffer_total_size` is the total capacity of the `xml_content` buffer.

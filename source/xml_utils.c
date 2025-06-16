@@ -21,45 +21,58 @@ const char* find_tag_value_start(const char* xml_content, const char* tag_name) 
     return NULL;
 }
 
-char* get_tag_string(const char* xml_content, const char* tag_name, char* buffer, int buffer_size) {
+int get_tag_string(const char* xml_content, const char* tag_name, char* buffer, int buffer_size) {
     if (!xml_content || !tag_name || !buffer || buffer_size <= 0) {
-        return NULL;
+        // If buffer is valid (i.e., not NULL and size > 0), ensure it's at least an empty string.
+        // This check is specifically for the case where buffer itself might be NULL or buffer_size is 0.
+        // If xml_content or tag_name is NULL, but buffer *is* valid, we should still clear it.
+        if (buffer && buffer_size > 0) {
+             buffer[0] = '\0';
+        }
+        return -1; // Bad parameters
     }
-    buffer[0] = '\0'; // Initialize buffer to empty string for safety
+    buffer[0] = '\0'; // Default to empty string for safety on other errors too
+
     const char* value_start = find_tag_value_start(xml_content, tag_name);
     if (!value_start) {
-        return NULL; // Opening tag not found
+        // buffer[0] is already '\0'
+        return -1; // Tag not found
     }
+
     char close_tag[128];
     int written = snprintf(close_tag, sizeof(close_tag), "</%s>", tag_name);
     if (written < 0 || (size_t)written >= sizeof(close_tag)) {
-        return NULL; // Error during tag construction or tag_name too long
+        // buffer[0] is already '\0'
+        return -1; // Error constructing close_tag, effectively a general error
     }
+
     const char* value_end = strstr(value_start, close_tag);
     if (!value_end) {
-        return NULL; // Closing tag not found
+        // buffer[0] is already '\0'
+        return -1; // Closing tag not found
     }
-    if (value_start == value_end) { // Empty tag value <tag></tag>
-        return buffer; // buffer is already '\0' terminated
+
+    if (value_start == value_end) { // Empty tag value like <tag></tag>
+        // buffer[0] is already '\0'
+        return 0; // Success, value is empty string
     }
+
     ptrdiff_t value_len = value_end - value_start;
-    if (value_len < 0) { // Should not happen with valid XML and strstr logic
-        return NULL;
+    if (value_len < 0) {
+        // buffer[0] is already '\0'
+        return -1; // Should be impossible / general error
     }
 
-    // Check if the value (excluding null terminator) can fit in the buffer.
-    // buffer_size includes space for the null terminator.
-    // So, value_len must be less than buffer_size.
     if (value_len >= buffer_size) {
-        // Value is too large for the provided buffer.
-        // Return NULL; buffer[0] is already '\0'.
-        return NULL;
+        // buffer[0] is already '\0'
+        return -2; // Buffer too small
     }
 
-    // If we reach here, value_len < buffer_size, so it fits.
+    // If we reach here, value_len < buffer_size and value_len >= 0.
+    // And value_len > 0 because value_start != value_end case was handled.
     memcpy(buffer, value_start, value_len);
     buffer[value_len] = '\0';
-    return buffer;
+    return 0; // Success
 }
 
 int set_tag_string(char* xml_content, size_t xml_buffer_total_size, const char* tag_name, const char* new_value) {
