@@ -28,7 +28,7 @@ TEST_EXEC = $(BUILD_DIR)/test_xml_utils_pc
 all: $(TEST_EXEC)
 
 # Rule to create the build directory
-$(BUILD_DIR_MARKER):
+$(BUILD_DIR):
 	@echo "Creating build directory $(BUILD_DIR)..."
 	@mkdir -p $(BUILD_DIR)
 
@@ -40,13 +40,13 @@ $(TEST_EXEC): $(XML_UTILS_OBJ) $(TEST_OBJ)
 
 # Compilation rule for .c files in source/ to .o files in BUILD_DIR/
 # This rule handles xml_utils.c -> build/pc_test/xml_utils.o
-$(BUILD_DIR)/xml_utils.o: $(SOURCE_DIR)/xml_utils.c
+$(BUILD_DIR)/xml_utils.o: $(SOURCE_DIR)/xml_utils.c | $(BUILD_DIR)
 	@echo "Compiling $< to $@..."
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Compilation rule for .c files in tests/ to .o files in BUILD_DIR/
 # This rule handles test_xml_utils.c -> build/pc_test/test_xml_utils.o
-$(BUILD_DIR)/test_xml_utils.o: $(TEST_DIR)/test_xml_utils.c
+$(BUILD_DIR)/test_xml_utils.o: $(TEST_DIR)/test_xml_utils.c | $(BUILD_DIR)
 	@echo "Compiling $< to $@..."
 	$(CC) $(CFLAGS) -c $< -o $@
 
