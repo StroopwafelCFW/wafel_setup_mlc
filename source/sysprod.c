@@ -34,7 +34,7 @@ int modify_sys_prod_xml(int fsa_handle, int product_area_val, int game_region_va
         return -1;
     }
 
-    const char* xml_path = "/vol/system/sys/config/sys_prod.xml";
+    const char* xml_path = "/vol/system/config/sys_prod.xml";
     int file_handle = -1;
     char* xml_buffer = NULL;
     int result = -1;
