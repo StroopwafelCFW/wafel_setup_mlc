@@ -13,8 +13,19 @@
 #define XML_UTIL_ERROR_INTERNAL           -6 // Internal error, e.g., snprintf failure for tag construction
 
 // Function to find the starting point of a tag's value within XML content.
-// Returns a pointer to the start of the value, or NULL if tag not found or error in tag construction.
+// It correctly handles opening tags that may contain attributes by searching for "<tag_name"
+// and then finding the subsequent closing '>' of that opening tag.
+// Example: For "<tag attr='val'>value</tag>", it returns a pointer to "value".
+// Returns a pointer to the first character of the tag's value,
+// or NULL if the tag is not found, if the tag_name is invalid (e.g., empty or too long for internal buffers),
+// or if the XML is malformed (e.g., opening tag not properly closed with '>').
 const char* find_tag_value_start(const char* xml_content, const char* tag_name);
+
+// Function to find the starting position of a closing tag.
+// Searches for "</tag_name>" starting from `search_start_pos`.
+// Returns a pointer to the '<' of the closing tag if found, or NULL otherwise.
+// Also returns NULL if `tag_name` is invalid (e.g., empty or too long for internal buffers) or on other internal errors.
+const char* find_closing_tag_pos(const char* search_start_pos, const char* tag_name);
 
 // Function to extract the string value of a given tag.
 // Copies the value into `buffer`. `buffer` will be an empty string on error if buffer itself is valid.

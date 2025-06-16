@@ -2,70 +2,109 @@
 #include <string.h>    // For strlen, strstr, memcpy, memmove
 #include <stdio.h>     // For snprintf
 #include <stddef.h>    // For ptrdiff_t, size_t
+#include <ctype.h>     // For isspace
 
 const char* find_tag_value_start(const char* xml_content, const char* tag_name) {
-    if (!xml_content || !tag_name) {
-        // This function returns NULL on bad params or if tag construction fails.
-        // The caller (e.g., get_tag_string) should interpret this.
+    if (!xml_content || !tag_name || *tag_name == '\0') { // Empty tag name is invalid
         return NULL;
     }
-    char open_tag[128]; // Assuming tag names are reasonably short for this buffer
-    int written = snprintf(open_tag, sizeof(open_tag), "<%s>", tag_name);
 
-    // If snprintf fails (returns negative) or truncates (written >= sizeof(open_tag)),
-    // open_tag is not reliable or not correctly formed.
-    if (written < 0 || (size_t)written >= sizeof(open_tag)) {
-        return NULL; // Cannot construct tag, so effectively "tag not found" or "bad tag_name"
+    char open_tag_prefix[128];
+    // Construct just the "<tag_name" part. Max tag name length around 120 for this buffer size.
+    int written = snprintf(open_tag_prefix, sizeof(open_tag_prefix), "<%s", tag_name);
+    // Ensure snprintf succeeded and the full prefix fit.
+    // written should be exactly strlen("<") + strlen(tag_name).
+    // If written is too large, it means tag_name was too long for open_tag_prefix buffer.
+    if (written < 0 || (size_t)written >= sizeof(open_tag_prefix)) {
+        return NULL; // Tag name too long for our internal buffer or snprintf error
     }
 
-    const char* tag_start = strstr(xml_content, open_tag);
-    if (tag_start) {
-        // strlen(open_tag) is safe because if written >= sizeof(open_tag), we'd have returned NULL.
-        // If written is valid, open_tag is null-terminated by snprintf within its bounds.
-        return tag_start + strlen(open_tag);
+    const char* current_pos = xml_content;
+    while ((current_pos = strstr(current_pos, open_tag_prefix)) != NULL) {
+        const char* after_prefix = current_pos + written; // Point right after the constructed "<tag_name"
+
+        // Check character immediately after "<tag_name"
+        // It must be whitespace, '>', or '/' (for self-closing tags like <tag/> or <tag /> )
+        // This check prevents matching "<tag" in "<tag_other>" or "<tagAndMore>".
+        if (*after_prefix != '>' && !isspace((unsigned char)*after_prefix) && *after_prefix != '/') {
+             current_pos = after_prefix; // Advance search position past this partial match
+             continue;
+        }
+
+        // We've found "<tag_name" followed by a valid character (space, '>', or '/').
+        // Now, scan forward from this point to find the closing '>' of this opening tag.
+        const char* tag_end_char = strchr(after_prefix, '>');
+        if (tag_end_char) {
+            // We found the end of the opening tag. The value starts right after this '>'.
+            return tag_end_char + 1;
+        } else {
+            // Malformed XML: opening tag part found (e.g. "<tag ") but no subsequent '>'
+            return NULL;
+        }
     }
-    return NULL; // Tag not found
+
+    return NULL; // Tag prefix not found at all after scanning the whole content
+}
+
+const char* find_closing_tag_pos(const char* search_start_pos, const char* tag_name) {
+    if (!search_start_pos || !tag_name || *tag_name == '\0') {
+        return NULL; // Invalid parameters
+    }
+
+    char closing_tag_str[128]; // Buffer for "</tag_name>"
+    // Max tag_name length for this buffer: sizeof(closing_tag_str) - strlen("</>") - 1 (for null terminator)
+    // e.g., 128 - 3 - 1 = 124 characters for tag_name
+    int written = snprintf(closing_tag_str, sizeof(closing_tag_str), "</%s>", tag_name);
+
+    if (written < 0 || (size_t)written >= sizeof(closing_tag_str)) {
+        // Error in constructing closing_tag_str (e.g., tag_name too long or snprintf error)
+        return NULL;
+    }
+
+    return strstr(search_start_pos, closing_tag_str);
 }
 
 int get_tag_string(const char* xml_content, const char* tag_name, char* buffer, int buffer_size) {
     if (!xml_content || !tag_name || !buffer || buffer_size <= 0) {
-        if (buffer && buffer_size > 0) { // Check if buffer is somewhat valid before writing
+        if (buffer && buffer_size > 0) {
              buffer[0] = '\0';
         }
         return XML_UTIL_ERROR_BAD_PARAMS;
     }
-    buffer[0] = '\0'; // Default to empty string for safety on subsequent errors
+    buffer[0] = '\0';
 
     const char* value_start = find_tag_value_start(xml_content, tag_name);
     if (!value_start) {
-        // This can be due to tag_name being invalid for snprintf in find_tag_value_start,
-        // or the tag simply not being present.
         return XML_UTIL_ERROR_TAG_NOT_FOUND;
     }
 
-    char close_tag[128];
-    int written = snprintf(close_tag, sizeof(close_tag), "</%s>", tag_name);
-    if (written < 0 || (size_t)written >= sizeof(close_tag)) {
-        return XML_UTIL_ERROR_INTERNAL; // Error constructing close_tag
-    }
-
-    const char* value_end = strstr(value_start, close_tag);
+    // Use the new helper function to find the closing tag position
+    const char* value_end = find_closing_tag_pos(value_start, tag_name);
     if (!value_end) {
-        return XML_UTIL_ERROR_MALFORMED_XML; // Closing tag not found
+        // If find_closing_tag_pos returns NULL, it could be due to:
+        // 1. Closing tag genuinely not found (malformed XML from this point).
+        // 2. tag_name was invalid for snprintf inside find_closing_tag_pos (internal error).
+        // Given find_tag_value_start succeeded, tag_name was valid for its snprintf.
+        // So, this is more likely malformed XML or the closing tag is missing.
+        return XML_UTIL_ERROR_MALFORMED_XML;
     }
 
-    if (value_start == value_end) { // Empty tag value like <tag></tag>
+    if (value_start == value_end) { // Should not happen if value_end points to '<' of closing tag
+                                   // and value_start points after '>' of opening tag.
+                                   // This condition implies an empty value if value_end pointed *after* closing tag.
+                                   // However, find_closing_tag_pos returns start of "</tag_name>".
+                                   // If value is truly empty, like <tag></tag>, value_start points to first '<' of closing.
+                                   // So value_start == value_end means empty.
         return XML_UTIL_SUCCESS; // buffer is already '\0' terminated and empty
     }
 
     ptrdiff_t value_len = value_end - value_start;
     if (value_len < 0) {
-        // This case should ideally not be reached if strstr and pointer logic is correct.
         return XML_UTIL_ERROR_INTERNAL;
     }
 
     if (value_len >= buffer_size) {
-        return XML_UTIL_ERROR_BUFFER_TOO_SMALL; // Buffer (for caller) is too small
+        return XML_UTIL_ERROR_BUFFER_TOO_SMALL;
     }
 
     memcpy(buffer, value_start, value_len);
@@ -80,20 +119,15 @@ int set_tag_string(char* xml_content, size_t xml_buffer_total_size, const char* 
 
     const char* value_start_const = find_tag_value_start(xml_content, tag_name);
     if (!value_start_const) {
-        // Failure in find_tag_value_start (e.g. bad tag_name for snprintf, or tag not in xml_content)
         return XML_UTIL_ERROR_TAG_NOT_FOUND;
     }
     char* value_start = xml_content + (value_start_const - xml_content);
 
-    char close_tag[128];
-    int written = snprintf(close_tag, sizeof(close_tag), "</%s>", tag_name);
-    if (written < 0 || (size_t)written >= sizeof(close_tag)) {
-        return XML_UTIL_ERROR_INTERNAL; // Error constructing close_tag
-    }
-
-    char* value_end = strstr(value_start, close_tag);
+    // Use the new helper function to find the closing tag position
+    char* value_end = (char*)find_closing_tag_pos(value_start, tag_name);
     if (!value_end) {
-        return XML_UTIL_ERROR_MALFORMED_XML; // Closing tag for value not found
+        // As in get_tag_string, this implies malformed XML or internal error from find_closing_tag_pos.
+        return XML_UTIL_ERROR_MALFORMED_XML;
     }
 
     size_t old_value_len = value_end - value_start;
@@ -104,16 +138,14 @@ int set_tag_string(char* xml_content, size_t xml_buffer_total_size, const char* 
         size_t current_total_xml_len = strlen(xml_content);
         size_t projected_new_total_xml_len = current_total_xml_len + len_diff;
         if ((projected_new_total_xml_len + 1) > xml_buffer_total_size) {
-            // This is a specific error code for set_tag_string, indicating the overall XML buffer would overflow.
-            // It's different from XML_UTIL_ERROR_BUFFER_TOO_SMALL which refers to the output buffer of get_tag_string.
-            return -2;
+            return -2; // Specific overflow error for set_tag_string
         }
     }
 
     if (len_diff != 0) {
-        char* rest_of_xml_start = value_end;
-        size_t rest_len = strlen(rest_of_xml_start) + 1;
-        memmove(value_start + new_value_len, rest_of_xml_start, rest_len);
+        // value_end points to the '<' of "</tag_name>". We need to move this entire closing tag.
+        size_t closing_tag_len = strlen(value_end); // This will be strlen("</tag_name>")
+        memmove(value_start + new_value_len, value_end, closing_tag_len + 1); // +1 for null terminator
     }
     memcpy(value_start, new_value, new_value_len);
     return XML_UTIL_SUCCESS;
