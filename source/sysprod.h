@@ -4,11 +4,6 @@
 #include <wafel/ios/svc.h>
 #include <stddef.h> // For size_t
 
-// Simple XML parser/modifier functions
-const char* find_tag_value_start(const char* xml_content, const char* tag_name);
-char* get_tag_string(const char* xml_content, const char* tag_name, char* buffer, int buffer_size);
-int set_tag_string(char* xml_content, size_t xml_buffer_total_size, const char* tag_name, const char* new_value);
-
 // These structs were taken directly from Garys recovery_menu
 typedef enum
 {

@@ -6,8 +6,8 @@
 // find_tag_value_start, get_tag_string, set_tag_string
 // These are declared in sysprod.h.
 // We assume that when compiling these tests, the include paths are set up
-// correctly to find "sysprod.h" and its dependencies like "wafel/ios/svc.h".
-#include "sysprod.h"
+// correctly to find "xml_utils.h" and its dependencies (like <stddef.h>).
+#include "xml_utils.h" // For XML helper function declarations
 
 // Test suite for find_tag_value_start (no changes needed for this function)
 static int test_find_tag_value_start() {
