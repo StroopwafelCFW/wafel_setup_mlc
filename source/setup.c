@@ -237,6 +237,35 @@ void fix_region(int fsaHandle, int logHandle){
     ret = MCP_SetSysProdSettings(mcp_handle, &sysProdSettings);
     debug_printf("Set Region to %X: %X\n", sysProdSettings.game_region, ret);
     log_printf(fsaHandle, logHandle, "Set region to %X:, %X\n", sysProdSettings.game_region, ret);
+
+    if (ret != 0) { // If MCP_SetSysProdSettings failed
+        debug_printf("MCP_SetSysProdSettings failed (ret: %X). Attempting XML fallback...\n", ret);
+        log_printf(fsaHandle, logHandle, "MCP_SetSysProdSettings failed (ret: %X). Attempting XML fallback...\n", ret);
+
+        // Call the public function from sysprod.h
+        // int modify_sys_prod_xml(int fsa_handle, int product_area, int game_region);
+        int fallback_ret = modify_sys_prod_xml(fsaHandle, sysProdSettings.product_area, sysProdSettings.game_region);
+
+        if (fallback_ret == 0) {
+            debug_printf("XML modification fallback SUCCEEDED.\n");
+            log_printf(fsaHandle, logHandle, "XML modification fallback SUCCEEDED.\n");
+            // If fallback succeeded, the overall operation might be considered a success.
+            // 'ret' currently holds the error from MCP_SetSysProdSettings.
+            // For now, we just log. The original error from MCP might still be relevant
+            // for overall status, or 'ret' could be set to 0 here if this success is sufficient.
+        } else {
+            debug_printf("XML modification fallback FAILED (ret: %X).\n", fallback_ret);
+            log_printf(fsaHandle, logHandle, "XML modification fallback FAILED (ret: %X).\n", fallback_ret);
+            // If fallback also failed, update error state.
+            update_error_state(fallback_ret, 2); // Level 2 for error
+        }
+    }
+    // MCP Handle should be closed if it was opened in this function.
+    // It seems mcp_handle is local to fix_region and should be closed before returning.
+    // Adding iosClose(mcp_handle);
+    if (mcp_handle >= 0) {
+        iosClose(mcp_handle);
+    }
 }
 
 u32 setup_main(void* arg){

@@ -2,6 +2,12 @@
 #include <assert.h>
 
 #include <wafel/ios/svc.h>
+#include <stddef.h> // For size_t
+
+// Simple XML parser/modifier functions
+const char* find_tag_value_start(const char* xml_content, const char* tag_name);
+char* get_tag_string(const char* xml_content, const char* tag_name, char* buffer, int buffer_size);
+int set_tag_string(char* xml_content, const char* tag_name, const char* new_value);
 
 // These structs were taken directly from Garys recovery_menu
 typedef enum
@@ -42,3 +48,6 @@ static_assert(sizeof(MCPSysProdSettings) == 0x46, "MCPSysProdSettings: different
 
 int MCP_GetSysProdSettings(int fd, MCPSysProdSettings* out_sysProdSettings);
 int MCP_SetSysProdSettings(int fd, const MCPSysProdSettings* sysProdSettings);
+
+// Function to modify sys_prod.xml directly via FSA
+int modify_sys_prod_xml(int fsa_handle, int product_area, int game_region);
