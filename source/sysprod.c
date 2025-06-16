@@ -69,9 +69,9 @@ int modify_sys_prod_xml(int fsa_handle, int product_area_val, int game_region_va
 
     char current_pa_value[16];
     int get_pa_ret = get_tag_string(xml_buffer, "product_area", current_pa_value, sizeof(current_pa_value));
-    if (get_pa_ret != 0) {
-        // get_pa_ret could be -1 (general error/not found) or -2 (buffer too small)
-        // For this specific use case, either error means we can't proceed with validation.
+    if (get_pa_ret != XML_UTIL_SUCCESS) {
+        // get_pa_ret could be various errors defined in xml_utils.h
+        // For this specific use case, any error means we can't proceed with validation.
         // printf("modify_sys_prod_xml: Failed to get current product_area (err: %d).\n", get_pa_ret);
         freeIobuf(xml_buffer);
         return -10; // Keep existing error code for "failed to get/validate current product_area"
@@ -91,7 +91,7 @@ int modify_sys_prod_xml(int fsa_handle, int product_area_val, int game_region_va
 
     char current_gr_value[16];
     int get_gr_ret = get_tag_string(xml_buffer, "game_region", current_gr_value, sizeof(current_gr_value));
-    if (get_gr_ret != 0) {
+    if (get_gr_ret != XML_UTIL_SUCCESS) {
         // printf("modify_sys_prod_xml: Failed to get current game_region (err: %d).\n", get_gr_ret);
         freeIobuf(xml_buffer);
         return -12; // Keep existing error code for "failed to get/validate current game_region"

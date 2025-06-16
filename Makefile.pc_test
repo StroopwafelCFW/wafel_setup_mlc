@@ -4,51 +4,61 @@
 # Compiler and flags
 CC = gcc
 # -Isource to find xml_utils.h in source/
-# -Itests might be needed if test_xml_utils.c included local test headers
 CFLAGS = -Wall -Wextra -g -Isource
 LDFLAGS =
 
-# Source directories
+# Directories
 SOURCE_DIR = source
 TEST_DIR = tests
+BUILD_DIR = build/pc_test # Output directory for build artifacts
 
 # Source files
 XML_UTILS_SRC = $(SOURCE_DIR)/xml_utils.c
-TEST_C_SRC = $(TEST_DIR)/test_xml_utils.c # Renamed variable for clarity
+TEST_C_SRC = $(TEST_DIR)/test_xml_utils.c
 
-# Object files
-# These will create, e.g., source/xml_utils.o and tests/test_xml_utils.o
-XML_UTILS_OBJ = $(XML_UTILS_SRC:.c=.o)
-TEST_OBJ = $(TEST_C_SRC:.c=.o)
+# Object files (paths will be, e.g., build/pc_test/xml_utils.o)
+XML_UTILS_OBJ = $(BUILD_DIR)/$(notdir $(XML_UTILS_SRC:.c=.o))
+TEST_OBJ = $(BUILD_DIR)/$(notdir $(TEST_C_SRC:.c=.o))
 
-# Target executable (will be created in the project root)
-TEST_EXEC = test_xml_utils_pc
+# Target executable (will be created in BUILD_DIR)
+TEST_EXEC = $(BUILD_DIR)/test_xml_utils_pc
+
+# Marker file to ensure build directory exists
+BUILD_DIR_MARKER = $(BUILD_DIR)/.marker
 
 .PHONY: all run clean
 
 all: $(TEST_EXEC)
 
-# Linking rule: uses object files from source/ and tests/ to create executable in root
-$(TEST_EXEC): $(XML_UTILS_OBJ) $(TEST_OBJ)
+# Rule to create the build directory
+$(BUILD_DIR_MARKER):
+	@echo "Creating build directory $(BUILD_DIR)..."
+	@mkdir -p $(BUILD_DIR)
+	@touch $(BUILD_DIR_MARKER)
+
+# Linking rule: uses object files from BUILD_DIR to create executable in BUILD_DIR
+$(TEST_EXEC): $(XML_UTILS_OBJ) $(TEST_OBJ) | $(BUILD_DIR_MARKER)
 	@echo "Linking $(TEST_EXEC)..."
 	$(CC) $(CFLAGS) -o $(TEST_EXEC) $(XML_UTILS_OBJ) $(TEST_OBJ) $(LDFLAGS)
-	@echo "$(TEST_EXEC) built successfully in project root."
+	@echo "$(notdir $(TEST_EXEC)) built successfully in $(BUILD_DIR)."
 
-# Compilation rule for .c files in source/ to .o files in source/
-$(SOURCE_DIR)/%.o: $(SOURCE_DIR)/%.c
-	@echo "Compiling $< (from $(SOURCE_DIR))..."
+# Compilation rule for .c files in source/ to .o files in BUILD_DIR/
+# This rule handles xml_utils.c -> build/pc_test/xml_utils.o
+$(BUILD_DIR)/xml_utils.o: $(SOURCE_DIR)/xml_utils.c | $(BUILD_DIR_MARKER)
+	@echo "Compiling $< to $@..."
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Compilation rule for .c files in tests/ to .o files in tests/
-$(TEST_DIR)/%.o: $(TEST_DIR)/%.c
-	@echo "Compiling $< (from $(TEST_DIR))..."
+# Compilation rule for .c files in tests/ to .o files in BUILD_DIR/
+# This rule handles test_xml_utils.c -> build/pc_test/test_xml_utils.o
+$(BUILD_DIR)/test_xml_utils.o: $(TEST_DIR)/test_xml_utils.c | $(BUILD_DIR_MARKER)
+	@echo "Compiling $< to $@..."
 	$(CC) $(CFLAGS) -c $< -o $@
 
 run: all
-	@echo "Running tests from project root..."
-	@./$(TEST_EXEC)
+	@echo "Running tests from project root (executable in $(BUILD_DIR))..."
+	@$(TEST_EXEC) # Execute directly as path is included
 
 clean:
-	@echo "Cleaning up..."
-	@rm -f $(XML_UTILS_OBJ) $(TEST_OBJ) $(TEST_EXEC)
+	@echo "Cleaning up build artifacts..."
+	@rm -rf $(BUILD_DIR) # Remove the entire build directory
 	@echo "Done."

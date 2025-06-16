@@ -2,7 +2,7 @@
 #include <string.h>
 #include <assert.h> // For assert()
 
-#include "xml_utils.h" // For XML helper function declarations
+#include "xml_utils.h" // For XML helper function declarations and error codes
 
 static int test_find_tag_value_start() {
     printf("Running tests for find_tag_value_start...\n");
@@ -35,19 +35,23 @@ static int test_find_tag_value_start() {
     else { printf("FAIL: find_tag_value_start TC4\n"); assert(0); }
 
     tests_run++;
-    result_ptr = find_tag_value_start(xml1, "nonexistent");
+    result_ptr = find_tag_value_start(xml1, "nonexistent"); // Expected: find_tag_value_start returns NULL
     if (result_ptr == NULL) tests_passed++;
-    else { printf("FAIL: find_tag_value_start TC5\n"); assert(0); }
+    else { printf("FAIL: find_tag_value_start TC5 (nonexistent)\n"); assert(0); }
 
     tests_run++;
-    result_ptr = find_tag_value_start(NULL, "test");
+    result_ptr = find_tag_value_start(NULL, "test"); // Expected: find_tag_value_start returns NULL (bad param)
     if (result_ptr == NULL) tests_passed++;
-    else { printf("FAIL: find_tag_value_start TC6\n"); assert(0); }
+    else { printf("FAIL: find_tag_value_start TC6 (NULL xml)\n"); assert(0); }
 
     tests_run++;
-    result_ptr = find_tag_value_start(xml1, NULL);
+    result_ptr = find_tag_value_start(xml1, NULL); // Expected: find_tag_value_start returns NULL (bad param)
     if (result_ptr == NULL) tests_passed++;
-    else { printf("FAIL: find_tag_value_start TC7\n"); assert(0); }
+    else { printf("FAIL: find_tag_value_start TC7 (NULL tag)\n"); assert(0); }
+
+    // Test for snprintf failure in find_tag_value_start (e.g. excessively long tag name if not handled)
+    // This is implicitly tested by get_tag_string's XML_UTIL_ERROR_TAG_NOT_FOUND case if find_tag_value_start returns NULL.
+    // No direct test here as find_tag_value_start itself doesn't return specific error codes.
 
     printf("find_tag_value_start tests: %d/%d PASSED\n", tests_passed, tests_run);
     return tests_passed == tests_run;
@@ -65,33 +69,33 @@ static int test_get_tag_string() {
     tests_run++;
     buffer[0] = 'X';
     res = get_tag_string(xml1, "test", buffer, sizeof(buffer));
-    if (res == 0 && strcmp(buffer, "value") == 0) tests_passed++;
-    else { printf("FAIL: get_tag_string TC1 - Expected ret 0, buf 'value'. Got %d, '%s'\n", res, buffer); assert(0); }
+    if (res == XML_UTIL_SUCCESS && strcmp(buffer, "value") == 0) tests_passed++;
+    else { printf("FAIL: get_tag_string TC1 - Expected ret XML_UTIL_SUCCESS (%d), buf 'value'. Got %d, '%s'\n", XML_UTIL_SUCCESS, res, buffer); assert(0); }
 
     // Test case 2: Nested tag extraction (value fits)
     const char* xml2 = "<outer><test>val</test></outer>";
     tests_run++;
     buffer[0] = 'X';
     res = get_tag_string(xml2, "test", buffer, sizeof(buffer));
-    if (res == 0 && strcmp(buffer, "val") == 0) tests_passed++;
-    else { printf("FAIL: get_tag_string TC2 - Expected ret 0, buf 'val'. Got %d, '%s'\n", res, buffer); assert(0); }
+    if (res == XML_UTIL_SUCCESS && strcmp(buffer, "val") == 0) tests_passed++;
+    else { printf("FAIL: get_tag_string TC2 - Expected ret XML_UTIL_SUCCESS (%d), buf 'val'. Got %d, '%s'\n", XML_UTIL_SUCCESS, res, buffer); assert(0); }
 
     // Test case 3: Empty value tag
     const char* xml3 = "<test></test>";
     tests_run++;
     buffer[0] = 'X';
     res = get_tag_string(xml3, "test", buffer, sizeof(buffer));
-    if (res == 0 && strcmp(buffer, "") == 0) tests_passed++;
-    else { printf("FAIL: get_tag_string TC3 - Expected ret 0, buf ''. Got %d, '%s'\n", res, buffer); assert(0); }
+    if (res == XML_UTIL_SUCCESS && strcmp(buffer, "") == 0) tests_passed++;
+    else { printf("FAIL: get_tag_string TC3 - Expected ret XML_UTIL_SUCCESS (%d), buf ''. Got %d, '%s'\n", XML_UTIL_SUCCESS, res, buffer); assert(0); }
 
-    // Test case 4: Value too long for buffer (expect -2)
+    // Test case 4: Value too long for buffer
     const char* xml_long_val = "<item>verylongvalue</item>"; // length 15
     char small_buf[10]; // Can hold 9 chars + null
     tests_run++;
     small_buf[0] = 'X';
     res = get_tag_string(xml_long_val, "item", small_buf, sizeof(small_buf));
-    if (res == -2 && small_buf[0] == '\0') tests_passed++;
-    else { printf("FAIL: get_tag_string TC4 - Expected ret -2, empty buf. Got %d, '%s'\n", res, small_buf); assert(0); }
+    if (res == XML_UTIL_ERROR_BUFFER_TOO_SMALL && small_buf[0] == '\0') tests_passed++;
+    else { printf("FAIL: get_tag_string TC4 - Expected ret XML_UTIL_ERROR_BUFFER_TOO_SMALL (%d), empty buf. Got %d, '%s'\n", XML_UTIL_ERROR_BUFFER_TOO_SMALL, res, small_buf); assert(0); }
 
     // Test case 5: Value fits exactly in buffer
     const char* xml_exact_val = "<item>exactfit</item>"; // length 8
@@ -99,41 +103,70 @@ static int test_get_tag_string() {
     tests_run++;
     exact_buf[0] = 'X';
     res = get_tag_string(xml_exact_val, "item", exact_buf, sizeof(exact_buf));
-    if (res == 0 && strcmp(exact_buf, "exactfit") == 0) tests_passed++;
-    else { printf("FAIL: get_tag_string TC5 - Expected ret 0, buf 'exactfit'. Got %d, '%s'\n", res, exact_buf); assert(0); }
+    if (res == XML_UTIL_SUCCESS && strcmp(exact_buf, "exactfit") == 0) tests_passed++;
+    else { printf("FAIL: get_tag_string TC5 - Expected ret XML_UTIL_SUCCESS (%d), buf 'exactfit'. Got %d, '%s'\n", XML_UTIL_SUCCESS, res, exact_buf); assert(0); }
 
-    // Test case 6: Value just one char too long for buffer (value len == buffer size, expect -2)
+    // Test case 6: Value just one char too long for buffer (value len == buffer size)
     const char* xml_just_too_long = "<item>toolonggg</item>"; // length 9
     char just_too_long_buf[9]; // Can hold 8 chars + null
     tests_run++;
     just_too_long_buf[0] = 'X';
     res = get_tag_string(xml_just_too_long, "item", just_too_long_buf, sizeof(just_too_long_buf));
-    if (res == -2 && just_too_long_buf[0] == '\0') tests_passed++;
-    else { printf("FAIL: get_tag_string TC6 - Expected ret -2, empty buf. Got %d, '%s'\n", res, just_too_long_buf); assert(0); }
+    if (res == XML_UTIL_ERROR_BUFFER_TOO_SMALL && just_too_long_buf[0] == '\0') tests_passed++;
+    else { printf("FAIL: get_tag_string TC6 - Expected ret XML_UTIL_ERROR_BUFFER_TOO_SMALL (%d), empty buf. Got %d, '%s'\n", XML_UTIL_ERROR_BUFFER_TOO_SMALL, res, just_too_long_buf); assert(0); }
 
-    // Test case 7: Non-existent tag (expect -1)
+    // Test case 7: Non-existent tag
     tests_run++;
     buffer[0] = 'X';
     res = get_tag_string(xml1, "nonexistent", buffer, sizeof(buffer));
-    if (res == -1 && buffer[0] == '\0') tests_passed++;
-    else { printf("FAIL: get_tag_string TC7 - Expected ret -1, empty buf. Got %d, '%s'\n", res, buffer); assert(0); }
+    if (res == XML_UTIL_ERROR_TAG_NOT_FOUND && buffer[0] == '\0') tests_passed++;
+    else { printf("FAIL: get_tag_string TC7 - Expected ret XML_UTIL_ERROR_TAG_NOT_FOUND (%d), empty buf. Got %d, '%s'\n", XML_UTIL_ERROR_TAG_NOT_FOUND, res, buffer); assert(0); }
 
-    // Test case 8: Tag exists but no closing tag (expect -1)
+    // Test case 8: Tag exists but no closing tag
     const char* xml_no_close = "<test>value_no_close";
     tests_run++;
     buffer[0] = 'X';
     res = get_tag_string(xml_no_close, "test", buffer, sizeof(buffer));
-    if (res == -1 && buffer[0] == '\0') tests_passed++;
-    else { printf("FAIL: get_tag_string TC8 - Expected ret -1, empty buf. Got %d, '%s'\n", res, buffer); assert(0); }
+    if (res == XML_UTIL_ERROR_MALFORMED_XML && buffer[0] == '\0') tests_passed++;
+    else { printf("FAIL: get_tag_string TC8 - Expected ret XML_UTIL_ERROR_MALFORMED_XML (%d), empty buf. Got %d, '%s'\n", XML_UTIL_ERROR_MALFORMED_XML, res, buffer); assert(0); }
 
-    // Test case 9: Buffer size 1 (expect -2 for value "a")
+    // Test case 9: Buffer size 1 (value "a" is too large)
     const char* xml_val_a = "<test>a</test>";
     char tiny_buffer_get[1];
     tests_run++;
     tiny_buffer_get[0] = 'X';
     res = get_tag_string(xml_val_a, "test", tiny_buffer_get, sizeof(tiny_buffer_get));
-    if (res == -2 && tiny_buffer_get[0] == '\0') tests_passed++;
-    else { printf("FAIL: get_tag_string TC9 - Expected ret -2, empty buf. Got %d, '%s'\n", res, tiny_buffer_get); assert(0); }
+    if (res == XML_UTIL_ERROR_BUFFER_TOO_SMALL && tiny_buffer_get[0] == '\0') tests_passed++;
+    else { printf("FAIL: get_tag_string TC9 - Expected ret XML_UTIL_ERROR_BUFFER_TOO_SMALL (%d), empty buf. Got %d, '%s'\n", XML_UTIL_ERROR_BUFFER_TOO_SMALL, res, tiny_buffer_get); assert(0); }
+
+    // Test case 10: Bad parameters (NULL xml_content)
+    tests_run++;
+    buffer[0] = 'X';
+    res = get_tag_string(NULL, "test", buffer, sizeof(buffer));
+    if (res == XML_UTIL_ERROR_BAD_PARAMS && buffer[0] == '\0') tests_passed++;
+    else { printf("FAIL: get_tag_string TC10 - Expected ret XML_UTIL_ERROR_BAD_PARAMS (%d), empty buf. Got %d, '%s'\n", XML_UTIL_ERROR_BAD_PARAMS, res, buffer); assert(0); }
+
+    // Test case 11: Bad parameters (NULL tag_name)
+    tests_run++;
+    buffer[0] = 'X';
+    res = get_tag_string(xml1, NULL, buffer, sizeof(buffer));
+    if (res == XML_UTIL_ERROR_BAD_PARAMS && buffer[0] == '\0') tests_passed++;
+    else { printf("FAIL: get_tag_string TC11 - Expected ret XML_UTIL_ERROR_BAD_PARAMS (%d), empty buf. Got %d, '%s'\n", XML_UTIL_ERROR_BAD_PARAMS, res, buffer); assert(0); }
+
+    // Test case 12: Bad parameters (NULL buffer)
+    tests_run++;
+    // No buffer check for this one as it's NULL
+    res = get_tag_string(xml1, "test", NULL, 10);
+    if (res == XML_UTIL_ERROR_BAD_PARAMS) tests_passed++;
+    else { printf("FAIL: get_tag_string TC12 - Expected ret XML_UTIL_ERROR_BAD_PARAMS (%d). Got %d\n", XML_UTIL_ERROR_BAD_PARAMS, res); assert(0); }
+
+    // Test case 13: Bad parameters (zero buffer_size)
+    tests_run++;
+    // No buffer check for this one as it's zero size
+    res = get_tag_string(xml1, "test", buffer, 0);
+    if (res == XML_UTIL_ERROR_BAD_PARAMS) tests_passed++;
+    else { printf("FAIL: get_tag_string TC13 - Expected ret XML_UTIL_ERROR_BAD_PARAMS (%d). Got %d\n", XML_UTIL_ERROR_BAD_PARAMS, res); assert(0); }
+
 
     printf("get_tag_string tests: %d/%d PASSED\n", tests_passed, tests_run);
     return tests_passed == tests_run;
@@ -150,55 +183,56 @@ static int test_set_tag_string() {
     tests_run++;
     strcpy(xml_buffer, "<root><item>old</item></root>");
     set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "new");
-    if (set_res == 0 && strcmp(xml_buffer, "<root><item>new</item></root>") == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string TC1\n"); assert(0); }
+    if (set_res == XML_UTIL_SUCCESS && strcmp(xml_buffer, "<root><item>new</item></root>") == 0) tests_passed++;
+    else { printf("FAIL: set_tag_string TC1. Got %d\n", set_res); assert(0); }
 
     tests_run++;
     strcpy(xml_buffer, "<root><item>longer</item></root>");
     set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "short");
-    if (set_res == 0 && strcmp(xml_buffer, "<root><item>short</item></root>") == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string TC2\n"); assert(0); }
+    if (set_res == XML_UTIL_SUCCESS && strcmp(xml_buffer, "<root><item>short</item></root>") == 0) tests_passed++;
+    else { printf("FAIL: set_tag_string TC2. Got %d\n", set_res); assert(0); }
 
     tests_run++;
     strcpy(xml_buffer, "<root><item>short</item></root>");
     set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "much_longer_value");
-    if (set_res == 0 && strcmp(xml_buffer, "<root><item>much_longer_value</item></root>") == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string TC3\n"); assert(0); }
+    if (set_res == XML_UTIL_SUCCESS && strcmp(xml_buffer, "<root><item>much_longer_value</item></root>") == 0) tests_passed++;
+    else { printf("FAIL: set_tag_string TC3. Got %d\n", set_res); assert(0); }
 
     tests_run++;
     strcpy(xml_buffer, "<root><item>data</item></root>");
     set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "");
-    if (set_res == 0 && strcmp(xml_buffer, "<root><item></item></root>") == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string TC4\n"); assert(0); }
+    if (set_res == XML_UTIL_SUCCESS && strcmp(xml_buffer, "<root><item></item></root>") == 0) tests_passed++;
+    else { printf("FAIL: set_tag_string TC4. Got %d\n", set_res); assert(0); }
 
     tests_run++;
     strcpy(xml_buffer, "<root><item></item></root>");
     set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "filled");
-    if (set_res == 0 && strcmp(xml_buffer, "<root><item>filled</item></root>") == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string TC5\n"); assert(0); }
+    if (set_res == XML_UTIL_SUCCESS && strcmp(xml_buffer, "<root><item>filled</item></root>") == 0) tests_passed++;
+    else { printf("FAIL: set_tag_string TC5. Got %d\n", set_res); assert(0); }
 
     tests_run++;
     strcpy(xml_buffer, "<root><item>value</item></root>");
     strcpy(original_xml_content, xml_buffer);
     set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "nonexistent", "new");
-    if (set_res == -1 && strcmp(xml_buffer, original_xml_content) == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string TC6\n"); assert(0); }
+    // Expect TAG_NOT_FOUND from updated set_tag_string
+    if (set_res == XML_UTIL_ERROR_TAG_NOT_FOUND && strcmp(xml_buffer, original_xml_content) == 0) tests_passed++;
+    else { printf("FAIL: set_tag_string TC6. Expected %d. Got %d\n", XML_UTIL_ERROR_TAG_NOT_FOUND, set_res); assert(0); }
 
     tests_run++;
     strcpy(xml_buffer, "<data><val1>abc</val1><val2>def</val2></data>");
     set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "val1", "xyz");
-    if (set_res == 0 && strcmp(xml_buffer, "<data><val1>xyz</val1><val2>def</val2></data>") == 0) {
+    if (set_res == XML_UTIL_SUCCESS && strcmp(xml_buffer, "<data><val1>xyz</val1><val2>def</val2></data>") == 0) {
         set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "val2", "jkl");
-        if (set_res == 0 && strcmp(xml_buffer, "<data><val1>xyz</val1><val2>jkl</val2></data>") == 0) tests_passed++;
-        else { printf("FAIL: set_tag_string TC7b\n"); assert(0); }
-    } else { printf("FAIL: set_tag_string TC7a\n"); assert(0); }
+        if (set_res == XML_UTIL_SUCCESS && strcmp(xml_buffer, "<data><val1>xyz</val1><val2>jkl</val2></data>") == 0) tests_passed++;
+        else { printf("FAIL: set_tag_string TC7b. Got %d\n", set_res); assert(0); }
+    } else { printf("FAIL: set_tag_string TC7a. Got %d\n", set_res); assert(0); }
 
 
     tests_run++;
     strcpy(xml_buffer, "<first>one</first><second>two</second>");
     set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "second", "new_two");
-    if (set_res == 0 && strcmp(xml_buffer, "<first>one</first><second>new_two</second>") == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string TC8\n"); assert(0); }
+    if (set_res == XML_UTIL_SUCCESS && strcmp(xml_buffer, "<first>one</first><second>new_two</second>") == 0) tests_passed++;
+    else { printf("FAIL: set_tag_string TC8. Got %d\n", set_res); assert(0); }
 
     printf("Testing set_tag_string overflow conditions...\n");
     char tight_buffer[30];
@@ -207,36 +241,36 @@ static int test_set_tag_string() {
     strcpy(tight_buffer, "<tag>short</tag>");
     strcpy(original_xml_content, tight_buffer);
     set_res = set_tag_string(tight_buffer, sizeof(tight_buffer), "tag", "this_is_a_very_long_value");
-    if (set_res == -2 && strcmp(tight_buffer, original_xml_content) == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string Overflow TC1\n"); assert(0); }
+    if (set_res == -2 && strcmp(tight_buffer, original_xml_content) == 0) tests_passed++; // -2 is set_tag_string's specific overflow
+    else { printf("FAIL: set_tag_string Overflow TC1. Got %d\n", set_res); assert(0); }
 
     tests_run++;
     strcpy(tight_buffer, "<tag>val</tag>");
     set_res = set_tag_string(tight_buffer, sizeof(tight_buffer), "tag", "value_fits_tight");
-    if (set_res == 0 && strcmp(tight_buffer, "<tag>value_fits_tight</tag>") == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string Overflow TC2\n"); assert(0); }
+    if (set_res == XML_UTIL_SUCCESS && strcmp(tight_buffer, "<tag>value_fits_tight</tag>") == 0) tests_passed++;
+    else { printf("FAIL: set_tag_string Overflow TC2. Got %d\n", set_res); assert(0); }
 
     char tiny_buf[10];
     tests_run++;
     strcpy(tiny_buf, "<t>v</t>");
     strcpy(original_xml_content, tiny_buf);
     set_res = set_tag_string(tiny_buf, sizeof(tiny_buf), "t", "123");
-    if (set_res == -2 && strcmp(tiny_buf, original_xml_content) == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string Overflow TC3 (tiny_buf '123')\n"); assert(0); }
+    if (set_res == -2 && strcmp(tiny_buf, original_xml_content) == 0) tests_passed++; // -2 specific overflow
+    else { printf("FAIL: set_tag_string Overflow TC3 (tiny_buf '123'). Got %d\n", set_res); assert(0); }
 
     char eleven_buf[11];
     tests_run++;
     strcpy(eleven_buf, "<t>v</t>");
     set_res = set_tag_string(eleven_buf, sizeof(eleven_buf), "t", "123");
-    if (set_res == 0 && strcmp(eleven_buf, "<t>123</t>") == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string Exact Fit TC (eleven_buf '123')\n"); assert(0); }
+    if (set_res == XML_UTIL_SUCCESS && strcmp(eleven_buf, "<t>123</t>") == 0) tests_passed++;
+    else { printf("FAIL: set_tag_string Exact Fit TC (eleven_buf '123'). Got %d\n", set_res); assert(0); }
 
     tests_run++;
     strcpy(tiny_buf, "<t>v</t>");
     strcpy(original_xml_content, tiny_buf);
     set_res = set_tag_string(tiny_buf, sizeof(tiny_buf), "t", "1234");
-    if (set_res == -2 && strcmp(tiny_buf, original_xml_content) == 0) tests_passed++;
-    else { printf("FAIL: set_tag_string Overflow TC4 (tiny_buf '1234')\n"); assert(0); }
+    if (set_res == -2 && strcmp(tiny_buf, original_xml_content) == 0) tests_passed++; // -2 specific overflow
+    else { printf("FAIL: set_tag_string Overflow TC4 (tiny_buf '1234'). Got %d\n", set_res); assert(0); }
 
 
     printf("set_tag_string tests (including overflow): %d/%d PASSED\n", tests_passed, tests_run);
@@ -289,7 +323,7 @@ static int test_xml_modification_scenario() {
     // 1. Get and validate initial product_area
     tests_run++;
     op_res = get_tag_string(xml_buffer, "product_area", temp_value_buffer, sizeof(temp_value_buffer));
-    int pa_valid_initial = (op_res == 0 && strcmp(temp_value_buffer, initial_pa) == 0);
+    int pa_valid_initial = (op_res == XML_UTIL_SUCCESS && strcmp(temp_value_buffer, initial_pa) == 0);
     int pa_is_allowed_type = pa_valid_initial && (strcmp(temp_value_buffer, "1") == 0 || strcmp(temp_value_buffer, "2") == 0 || strcmp(temp_value_buffer, "4") == 0 || strcmp(temp_value_buffer, "119") == 0);
     if (pa_is_allowed_type) {
         tests_passed++;
@@ -301,7 +335,7 @@ static int test_xml_modification_scenario() {
     // 2. Get and validate initial game_region
     tests_run++;
     op_res = get_tag_string(xml_buffer, "game_region", temp_value_buffer, sizeof(temp_value_buffer));
-    int gr_valid_initial = (op_res == 0 && strcmp(temp_value_buffer, initial_gr) == 0);
+    int gr_valid_initial = (op_res == XML_UTIL_SUCCESS && strcmp(temp_value_buffer, initial_gr) == 0);
     int gr_is_allowed_type = gr_valid_initial && (strcmp(temp_value_buffer, "1") == 0 || strcmp(temp_value_buffer, "2") == 0 || strcmp(temp_value_buffer, "4") == 0 || strcmp(temp_value_buffer, "119") == 0);
     if (gr_is_allowed_type) {
         tests_passed++;
@@ -313,14 +347,14 @@ static int test_xml_modification_scenario() {
     // 3. Set new product_area
     tests_run++;
     op_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "product_area", new_pa_str);
-    if (op_res == 0) {
+    if (op_res == XML_UTIL_SUCCESS) {
          tests_passed++;
     } else { printf("FAIL: Scenario - Set new product_area to %s, got %d\n", new_pa_str, op_res); assert(0); }
 
     // 4. Set new game_region
     tests_run++;
     op_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "game_region", new_gr_str);
-    if (op_res == 0) {
+    if (op_res == XML_UTIL_SUCCESS) {
         tests_passed++;
     } else { printf("FAIL: Scenario - Set new game_region to %s, got %d\n", new_gr_str, op_res); assert(0); }
 

@@ -1,126 +1,120 @@
-#include "xml_utils.h" // For function declarations
+#include "xml_utils.h" // For function declarations and error codes
 #include <string.h>    // For strlen, strstr, memcpy, memmove
-#include <stdio.h>     // For snprintf (used in find_tag_value_start and set_tag_string to construct tag strings)
-#include <stddef.h>    // For ptrdiff_t, size_t (though often available via other headers like string.h)
+#include <stdio.h>     // For snprintf
+#include <stddef.h>    // For ptrdiff_t, size_t
 
-// XML helper functions (find_tag_value_start, get_tag_string, set_tag_string)
-// These are public, declared in xml_utils.h
 const char* find_tag_value_start(const char* xml_content, const char* tag_name) {
     if (!xml_content || !tag_name) {
+        // This function returns NULL on bad params or if tag construction fails.
+        // The caller (e.g., get_tag_string) should interpret this.
         return NULL;
     }
-    char open_tag[128];
+    char open_tag[128]; // Assuming tag names are reasonably short for this buffer
     int written = snprintf(open_tag, sizeof(open_tag), "<%s>", tag_name);
+
+    // If snprintf fails (returns negative) or truncates (written >= sizeof(open_tag)),
+    // open_tag is not reliable or not correctly formed.
     if (written < 0 || (size_t)written >= sizeof(open_tag)) {
-        return NULL; // Error during tag construction or tag_name too long
+        return NULL; // Cannot construct tag, so effectively "tag not found" or "bad tag_name"
     }
+
     const char* tag_start = strstr(xml_content, open_tag);
     if (tag_start) {
+        // strlen(open_tag) is safe because if written >= sizeof(open_tag), we'd have returned NULL.
+        // If written is valid, open_tag is null-terminated by snprintf within its bounds.
         return tag_start + strlen(open_tag);
     }
-    return NULL;
+    return NULL; // Tag not found
 }
 
 int get_tag_string(const char* xml_content, const char* tag_name, char* buffer, int buffer_size) {
     if (!xml_content || !tag_name || !buffer || buffer_size <= 0) {
-        // If buffer is valid (i.e., not NULL and size > 0), ensure it's at least an empty string.
-        // This check is specifically for the case where buffer itself might be NULL or buffer_size is 0.
-        // If xml_content or tag_name is NULL, but buffer *is* valid, we should still clear it.
-        if (buffer && buffer_size > 0) {
+        if (buffer && buffer_size > 0) { // Check if buffer is somewhat valid before writing
              buffer[0] = '\0';
         }
-        return -1; // Bad parameters
+        return XML_UTIL_ERROR_BAD_PARAMS;
     }
-    buffer[0] = '\0'; // Default to empty string for safety on other errors too
+    buffer[0] = '\0'; // Default to empty string for safety on subsequent errors
 
     const char* value_start = find_tag_value_start(xml_content, tag_name);
     if (!value_start) {
-        // buffer[0] is already '\0'
-        return -1; // Tag not found
+        // This can be due to tag_name being invalid for snprintf in find_tag_value_start,
+        // or the tag simply not being present.
+        return XML_UTIL_ERROR_TAG_NOT_FOUND;
     }
 
     char close_tag[128];
     int written = snprintf(close_tag, sizeof(close_tag), "</%s>", tag_name);
     if (written < 0 || (size_t)written >= sizeof(close_tag)) {
-        // buffer[0] is already '\0'
-        return -1; // Error constructing close_tag, effectively a general error
+        return XML_UTIL_ERROR_INTERNAL; // Error constructing close_tag
     }
 
     const char* value_end = strstr(value_start, close_tag);
     if (!value_end) {
-        // buffer[0] is already '\0'
-        return -1; // Closing tag not found
+        return XML_UTIL_ERROR_MALFORMED_XML; // Closing tag not found
     }
 
     if (value_start == value_end) { // Empty tag value like <tag></tag>
-        // buffer[0] is already '\0'
-        return 0; // Success, value is empty string
+        return XML_UTIL_SUCCESS; // buffer is already '\0' terminated and empty
     }
 
     ptrdiff_t value_len = value_end - value_start;
     if (value_len < 0) {
-        // buffer[0] is already '\0'
-        return -1; // Should be impossible / general error
+        // This case should ideally not be reached if strstr and pointer logic is correct.
+        return XML_UTIL_ERROR_INTERNAL;
     }
 
     if (value_len >= buffer_size) {
-        // buffer[0] is already '\0'
-        return -2; // Buffer too small
+        return XML_UTIL_ERROR_BUFFER_TOO_SMALL; // Buffer (for caller) is too small
     }
 
-    // If we reach here, value_len < buffer_size and value_len >= 0.
-    // And value_len > 0 because value_start != value_end case was handled.
     memcpy(buffer, value_start, value_len);
     buffer[value_len] = '\0';
-    return 0; // Success
+    return XML_UTIL_SUCCESS;
 }
 
 int set_tag_string(char* xml_content, size_t xml_buffer_total_size, const char* tag_name, const char* new_value) {
     if (!xml_content || xml_buffer_total_size == 0 || !tag_name || !new_value) {
-        return -1; // Invalid parameters
+        return XML_UTIL_ERROR_BAD_PARAMS;
     }
 
     const char* value_start_const = find_tag_value_start(xml_content, tag_name);
     if (!value_start_const) {
-        return -1; // Tag not found
+        // Failure in find_tag_value_start (e.g. bad tag_name for snprintf, or tag not in xml_content)
+        return XML_UTIL_ERROR_TAG_NOT_FOUND;
     }
-    // Calculate the mutable pointer 'value_start' from the const 'value_start_const'
-    // by finding its offset from the beginning of xml_content.
     char* value_start = xml_content + (value_start_const - xml_content);
 
-    char close_tag[128]; // Assuming tag names are reasonably short
+    char close_tag[128];
     int written = snprintf(close_tag, sizeof(close_tag), "</%s>", tag_name);
     if (written < 0 || (size_t)written >= sizeof(close_tag)) {
-        return -1; // Error constructing close_tag or tag_name too long
+        return XML_UTIL_ERROR_INTERNAL; // Error constructing close_tag
     }
 
     char* value_end = strstr(value_start, close_tag);
     if (!value_end) {
-        return -1; // Closing tag not found
+        return XML_UTIL_ERROR_MALFORMED_XML; // Closing tag for value not found
     }
 
     size_t old_value_len = value_end - value_start;
     size_t new_value_len = strlen(new_value);
     ptrdiff_t len_diff = new_value_len - old_value_len;
 
-    // Check for potential overflow before memmove if the new value is larger
     if (len_diff > 0) {
-        size_t current_total_xml_len = strlen(xml_content); // Length of current XML string content
+        size_t current_total_xml_len = strlen(xml_content);
         size_t projected_new_total_xml_len = current_total_xml_len + len_diff;
-
         if ((projected_new_total_xml_len + 1) > xml_buffer_total_size) {
-            return -2; // Specific error code for overflow
+            // This is a specific error code for set_tag_string, indicating the overall XML buffer would overflow.
+            // It's different from XML_UTIL_ERROR_BUFFER_TOO_SMALL which refers to the output buffer of get_tag_string.
+            return -2;
         }
     }
 
     if (len_diff != 0) {
         char* rest_of_xml_start = value_end;
         size_t rest_len = strlen(rest_of_xml_start) + 1;
-        char* dest = value_start + new_value_len;
-        memmove(dest, rest_of_xml_start, rest_len);
+        memmove(value_start + new_value_len, rest_of_xml_start, rest_len);
     }
-
     memcpy(value_start, new_value, new_value_len);
-
-    return 0; // Success
+    return XML_UTIL_SUCCESS;
 }
