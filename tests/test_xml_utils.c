@@ -123,12 +123,12 @@ static int test_get_tag_string() {
 
     // Test case 9: Buffer size 1 (can only hold null terminator)
     const char* xml_val_a = "<test>a</test>"; // value "a" length 1
-    char tiny_buffer[1];
+    char tiny_buffer_get[1]; // Renamed to avoid conflict with set_tag_string tests
     tests_run++;
-    tiny_buffer[0] = 'X';
+    tiny_buffer_get[0] = 'X';
     // Value "a" (len 1) needs buffer of size 2. Buffer of size 1 is too small.
-    assert(get_tag_string(xml_val_a, "test", tiny_buffer, sizeof(tiny_buffer)) == NULL && tiny_buffer[0] == '\0');
-    if (get_tag_string(xml_val_a, "test", tiny_buffer, sizeof(tiny_buffer)) == NULL && tiny_buffer[0] == '\0') tests_passed++;
+    assert(get_tag_string(xml_val_a, "test", tiny_buffer_get, sizeof(tiny_buffer_get)) == NULL && tiny_buffer_get[0] == '\0');
+    if (get_tag_string(xml_val_a, "test", tiny_buffer_get, sizeof(tiny_buffer_get)) == NULL && tiny_buffer_get[0] == '\0') tests_passed++;
 
     printf("get_tag_string tests: %d/%d PASSED\n", tests_passed, tests_run);
     return tests_passed == tests_run;
@@ -141,98 +141,114 @@ static int test_set_tag_string() {
     int tests_passed = 0;
     int tests_run = 0;
     char original_xml_content[256]; // For checking buffer unchanged on error
+    int set_res; // To store result of set_tag_string for checking
 
     // Test case 1: New value same length
     tests_run++;
     strcpy(xml_buffer, "<root><item>old</item></root>");
-    assert(set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "new") == 0 && strcmp(xml_buffer, "<root><item>new</item></root>") == 0);
-    if (set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "new") == 0 && strcmp(xml_buffer, "<root><item>new</item></root>") == 0) tests_passed++;
+    set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "new");
+    assert(set_res == 0 && strcmp(xml_buffer, "<root><item>new</item></root>") == 0);
+    if (set_res == 0 && strcmp(xml_buffer, "<root><item>new</item></root>") == 0) tests_passed++;
 
     // Test case 2: New value shorter
     tests_run++;
     strcpy(xml_buffer, "<root><item>longer</item></root>");
-    assert(set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "short") == 0 && strcmp(xml_buffer, "<root><item>short</item></root>") == 0);
-    if (set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "short") == 0 && strcmp(xml_buffer, "<root><item>short</item></root>") == 0) tests_passed++;
+    set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "short");
+    assert(set_res == 0 && strcmp(xml_buffer, "<root><item>short</item></root>") == 0);
+    if (set_res == 0 && strcmp(xml_buffer, "<root><item>short</item></root>") == 0) tests_passed++;
 
     // Test case 3: New value longer (still fits in large buffer)
     tests_run++;
     strcpy(xml_buffer, "<root><item>short</item></root>");
-    assert(set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "much_longer_value") == 0 && strcmp(xml_buffer, "<root><item>much_longer_value</item></root>") == 0);
-    if (set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "much_longer_value") == 0 && strcmp(xml_buffer, "<root><item>much_longer_value</item></root>") == 0) tests_passed++;
+    set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "much_longer_value");
+    assert(set_res == 0 && strcmp(xml_buffer, "<root><item>much_longer_value</item></root>") == 0);
+    if (set_res == 0 && strcmp(xml_buffer, "<root><item>much_longer_value</item></root>") == 0) tests_passed++;
 
     // Test case 4: Empty new value
     tests_run++;
     strcpy(xml_buffer, "<root><item>data</item></root>");
-    assert(set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "") == 0 && strcmp(xml_buffer, "<root><item></item></root>") == 0);
-    if (set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "") == 0 && strcmp(xml_buffer, "<root><item></item></root>") == 0) tests_passed++;
+    set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "");
+    assert(set_res == 0 && strcmp(xml_buffer, "<root><item></item></root>") == 0);
+    if (set_res == 0 && strcmp(xml_buffer, "<root><item></item></root>") == 0) tests_passed++;
 
     // Test case 5: Setting value for an initially empty tag
     tests_run++;
     strcpy(xml_buffer, "<root><item></item></root>");
-    assert(set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "filled") == 0 && strcmp(xml_buffer, "<root><item>filled</item></root>") == 0);
-    if (set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "filled") == 0 && strcmp(xml_buffer, "<root><item>filled</item></root>") == 0) tests_passed++;
+    set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "item", "filled");
+    assert(set_res == 0 && strcmp(xml_buffer, "<root><item>filled</item></root>") == 0);
+    if (set_res == 0 && strcmp(xml_buffer, "<root><item>filled</item></root>") == 0) tests_passed++;
 
     // Test case 6: Tag not found
     tests_run++;
     strcpy(xml_buffer, "<root><item>value</item></root>");
     strcpy(original_xml_content, xml_buffer); // Save original
-    assert(set_tag_string(xml_buffer, sizeof(xml_buffer), "nonexistent", "new") == -1 && strcmp(xml_buffer, original_xml_content) == 0);
-    if (set_tag_string(xml_buffer, sizeof(xml_buffer), "nonexistent", "new") == -1 && strcmp(xml_buffer, original_xml_content) == 0) tests_passed++;
+    set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "nonexistent", "new");
+    assert(set_res == -1 && strcmp(xml_buffer, original_xml_content) == 0);
+    if (set_res == -1 && strcmp(xml_buffer, original_xml_content) == 0) tests_passed++;
 
     // Test case 7: Multiple tags, ensure only correct one is changed
     tests_run++;
     strcpy(xml_buffer, "<data><val1>abc</val1><val2>def</val2></data>");
-    assert(set_tag_string(xml_buffer, sizeof(xml_buffer), "val1", "xyz") == 0 && strcmp(xml_buffer, "<data><val1>xyz</val1><val2>def</val2></data>") == 0);
-    // Second modification on the same buffer
-    assert(set_tag_string(xml_buffer, sizeof(xml_buffer), "val2", "jkl") == 0 && strcmp(xml_buffer, "<data><val1>xyz</val1><val2>jkl</val2></data>") == 0);
-    if (set_tag_string(xml_buffer, sizeof(xml_buffer), "val1", "final1") == 0 &&
-        set_tag_string(xml_buffer, sizeof(xml_buffer), "val2", "final2") == 0 &&
-        strcmp(xml_buffer, "<data><val1>final1</val1><val2>final2</val2></data>") == 0) tests_passed++;
+    set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "val1", "xyz");
+    assert(set_res == 0 && strcmp(xml_buffer, "<data><val1>xyz</val1><val2>def</val2></data>") == 0);
+    set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "val2", "jkl"); // Second modification
+    assert(set_res == 0 && strcmp(xml_buffer, "<data><val1>xyz</val1><val2>jkl</val2></data>") == 0);
+    if (strcmp(xml_buffer, "<data><val1>xyz</val1><val2>jkl</val2></data>") == 0) tests_passed++;
 
 
     // Test case 8: Tag at the end of the document
     tests_run++;
     strcpy(xml_buffer, "<first>one</first><second>two</second>");
-    assert(set_tag_string(xml_buffer, sizeof(xml_buffer), "second", "new_two") == 0 && strcmp(xml_buffer, "<first>one</first><second>new_two</second>") == 0);
-    if (set_tag_string(xml_buffer, sizeof(xml_buffer), "second", "new_two_again") == 0 && strcmp(xml_buffer, "<first>one</first><second>new_two_again</second>") == 0) tests_passed++;
+    set_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "second", "new_two");
+    assert(set_res == 0 && strcmp(xml_buffer, "<first>one</first><second>new_two</second>") == 0);
+    if (set_res == 0 && strcmp(xml_buffer, "<first>one</first><second>new_two</second>") == 0) tests_passed++;
 
     printf("Testing set_tag_string overflow conditions...\n");
     char tight_buffer[30];
 
     // Overflow Test 1: New value makes it overflow
     tests_run++;
-    strcpy(tight_buffer, "<tag>short</tag>"); // strlen=15. Buffer capacity 30. Content: "<tag>short</tag>\0"
+    strcpy(tight_buffer, "<tag>short</tag>");
     strcpy(original_xml_content, tight_buffer);
-    // New value "this_is_a_very_long_value" (27 chars). Old "short" (5 chars). diff = 22.
-    // Projected total len = 15 + 22 = 37. (projected_len+1) = 38. 38 > 30, so overflow.
-    assert(set_tag_string(tight_buffer, sizeof(tight_buffer), "tag", "this_is_a_very_long_value") == -2 && strcmp(tight_buffer, original_xml_content) == 0);
-    if (set_tag_string(tight_buffer, sizeof(tight_buffer), "tag", "this_is_a_very_long_value") == -2 && strcmp(tight_buffer, original_xml_content) == 0) tests_passed++;
+    set_res = set_tag_string(tight_buffer, sizeof(tight_buffer), "tag", "this_is_a_very_long_value");
+    assert(set_res == -2 && strcmp(tight_buffer, original_xml_content) == 0);
+    if (set_res == -2 && strcmp(tight_buffer, original_xml_content) == 0) tests_passed++;
 
-    // Overflow Test 2: New value makes it fit exactly
+    // Overflow Test 2: New value makes it fit exactly (original was correct)
     tests_run++;
-    strcpy(tight_buffer, "<tag>val</tag>"); // strlen=13.
-    // New value "value_fits_tight" (16 chars). Old "val" (3 chars). diff = 13.
-    // Projected total len = 13 + 13 = 26. (projected_len+1) = 27. 27 <= 30, so fits.
-    assert(set_tag_string(tight_buffer, sizeof(tight_buffer), "tag", "value_fits_tight") == 0 && strcmp(tight_buffer, "<tag>value_fits_tight</tag>") == 0);
-    if (set_tag_string(tight_buffer, sizeof(tight_buffer), "tag", "value_fits_tight") == 0 && strcmp(tight_buffer, "<tag>value_fits_tight</tag>") == 0) tests_passed++;
+    strcpy(tight_buffer, "<tag>val</tag>");
+    set_res = set_tag_string(tight_buffer, sizeof(tight_buffer), "tag", "value_fits_tight");
+    assert(set_res == 0 && strcmp(tight_buffer, "<tag>value_fits_tight</tag>") == 0);
+    if (set_res == 0 && strcmp(tight_buffer, "<tag>value_fits_tight</tag>") == 0) tests_passed++;
 
-    // Overflow Test 3: New value *just* overflows (by one byte for null terminator)
-    char tiny_buf[10]; // Max string len = 9
+    // Corrected Overflow Test (formerly "Overflow Test 4"): value "123" in tiny_buf[10] IS an overflow
+    char tiny_buf[10];
     tests_run++;
-    strcpy(tiny_buf, "<t>v</t>"); // strlen=7. Content: "<t>v</t>\0"
+    strcpy(tiny_buf, "<t>v</t>");
+    strcpy(original_xml_content, tiny_buf);
+    // Target XML: "<t>123</t>" (10 chars). Needs 11 bytes for null terminator. sizeof(tiny_buf) is 10. Overflow.
+    set_res = set_tag_string(tiny_buf, sizeof(tiny_buf), "t", "123");
+    assert(set_res == -2 && strcmp(tiny_buf, original_xml_content) == 0);
+    if (set_res == -2 && strcmp(tiny_buf, original_xml_content) == 0) tests_passed++;
+
+    // New test: Exact fit for "<t>123</t>" using a buffer of size 11
+    char eleven_buf[11];
+    tests_run++;
+    strcpy(eleven_buf, "<t>v</t>");
+    // Target XML: "<t>123</t>" (10 chars). Needs 11 bytes for null terminator. sizeof(eleven_buf) is 11. Fits.
+    set_res = set_tag_string(eleven_buf, sizeof(eleven_buf), "t", "123");
+    assert(set_res == 0 && strcmp(eleven_buf, "<t>123</t>") == 0);
+    if (set_res == 0 && strcmp(eleven_buf, "<t>123</t>") == 0) tests_passed++;
+
+    // Overflow Test (was "Overflow Test 3"): New value *just* overflows tiny_buf[10]
+    tests_run++;
+    strcpy(tiny_buf, "<t>v</t>");
     strcpy(original_xml_content, tiny_buf);
     // New value: "1234" (4 chars). Old "v" (1 char). diff = 3.
     // Projected total len = 7 + 3 = 10. (projected_len+1) = 11. 11 > 10, so overflow.
-    assert(set_tag_string(tiny_buf, sizeof(tiny_buf), "t", "1234") == -2 && strcmp(tiny_buf, original_xml_content) == 0);
-    if (set_tag_string(tiny_buf, sizeof(tiny_buf), "t", "1234") == -2 && strcmp(tiny_buf, original_xml_content) == 0) tests_passed++;
-
-    // Overflow Test 4: New value fits exactly at limit of tiny_buf
-    tests_run++;
-    strcpy(tiny_buf, "<t>v</t>"); // strlen=7.
-    // New value: "123" (3 chars). Old "v" (1 char). diff = 2.
-    // Projected total len = 7 + 2 = 9. (projected_len+1) = 10. 10 <= 10, so fits.
-    assert(set_tag_string(tiny_buf, sizeof(tiny_buf), "t", "123") == 0 && strcmp(tiny_buf, "<t>123</t>") == 0);
-    if (set_tag_string(tiny_buf, sizeof(tiny_buf), "t", "123") == 0 && strcmp(tiny_buf, "<t>123</t>") == 0) tests_passed++;
+    set_res = set_tag_string(tiny_buf, sizeof(tiny_buf), "t", "1234");
+    assert(set_res == -2 && strcmp(tiny_buf, original_xml_content) == 0);
+    if (set_res == -2 && strcmp(tiny_buf, original_xml_content) == 0) tests_passed++;
 
 
     printf("set_tag_string tests (including overflow): %d/%d PASSED\n", tests_passed, tests_run);

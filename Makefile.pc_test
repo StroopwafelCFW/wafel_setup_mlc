@@ -3,20 +3,23 @@
 
 # Compiler and flags
 CC = gcc
-# -Isource to find xml_utils.h in the source/ directory
+# -Isource to find xml_utils.h in source/
+# -Itests might be needed if test_xml_utils.c included local test headers
 CFLAGS = -Wall -Wextra -g -Isource
 LDFLAGS =
 
-# Source directory
+# Source directories
 SOURCE_DIR = source
+TEST_DIR = tests
 
-# Source files (prefixed with source directory)
+# Source files
 XML_UTILS_SRC = $(SOURCE_DIR)/xml_utils.c
-TEST_SRC = $(SOURCE_DIR)/test_xml_utils.c
+TEST_C_SRC = $(TEST_DIR)/test_xml_utils.c # Renamed variable for clarity
 
-# Object files (will be created in the same directory as sources, e.g., source/xml_utils.o)
+# Object files
+# These will create, e.g., source/xml_utils.o and tests/test_xml_utils.o
 XML_UTILS_OBJ = $(XML_UTILS_SRC:.c=.o)
-TEST_OBJ = $(TEST_SRC:.c=.o)
+TEST_OBJ = $(TEST_C_SRC:.c=.o)
 
 # Target executable (will be created in the project root)
 TEST_EXEC = test_xml_utils_pc
@@ -25,20 +28,25 @@ TEST_EXEC = test_xml_utils_pc
 
 all: $(TEST_EXEC)
 
-# Linking rule: uses object files from source/ to create executable in root
+# Linking rule: uses object files from source/ and tests/ to create executable in root
 $(TEST_EXEC): $(XML_UTILS_OBJ) $(TEST_OBJ)
 	@echo "Linking $(TEST_EXEC)..."
 	$(CC) $(CFLAGS) -o $(TEST_EXEC) $(XML_UTILS_OBJ) $(TEST_OBJ) $(LDFLAGS)
-	@echo "$(TEST_EXEC) built successfully."
+	@echo "$(TEST_EXEC) built successfully in project root."
 
 # Compilation rule for .c files in source/ to .o files in source/
 $(SOURCE_DIR)/%.o: $(SOURCE_DIR)/%.c
-	@echo "Compiling $<..."
+	@echo "Compiling $< (from $(SOURCE_DIR))..."
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compilation rule for .c files in tests/ to .o files in tests/
+$(TEST_DIR)/%.o: $(TEST_DIR)/%.c
+	@echo "Compiling $< (from $(TEST_DIR))..."
 	$(CC) $(CFLAGS) -c $< -o $@
 
 run: all
-	@echo "Running tests..."
-	@./$(TEST_EXEC) # Assumes TEST_EXEC is in the current directory (project root)
+	@echo "Running tests from project root..."
+	@./$(TEST_EXEC)
 
 clean:
 	@echo "Cleaning up..."
