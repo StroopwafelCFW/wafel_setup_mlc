@@ -221,7 +221,7 @@ static int test_set_tag_string() {
     assert(set_res == 0 && strcmp(tight_buffer, "<tag>value_fits_tight</tag>") == 0);
     if (set_res == 0 && strcmp(tight_buffer, "<tag>value_fits_tight</tag>") == 0) tests_passed++;
 
-    // Corrected Overflow Test (formerly "Overflow Test 4"): value "123" in tiny_buf[10] IS an overflow
+    // Corrected Overflow Test: value "123" in tiny_buf[10] IS an overflow
     char tiny_buf[10];
     tests_run++;
     strcpy(tiny_buf, "<t>v</t>");
@@ -240,7 +240,7 @@ static int test_set_tag_string() {
     assert(set_res == 0 && strcmp(eleven_buf, "<t>123</t>") == 0);
     if (set_res == 0 && strcmp(eleven_buf, "<t>123</t>") == 0) tests_passed++;
 
-    // Overflow Test (was "Overflow Test 3"): New value *just* overflows tiny_buf[10]
+    // Overflow Test : New value *just* overflows tiny_buf[10]
     tests_run++;
     strcpy(tiny_buf, "<t>v</t>");
     strcpy(original_xml_content, tiny_buf);
@@ -254,6 +254,100 @@ static int test_set_tag_string() {
     printf("set_tag_string tests (including overflow): %d/%d PASSED\n", tests_passed, tests_run);
     return tests_passed == tests_run;
 }
+
+
+static int test_xml_modification_scenario() {
+    printf("Running tests for test_xml_modification_scenario...\n");
+    int tests_passed = 0;
+    int tests_run = 0;
+    int op_res; // For results of set/get operations
+    char* get_ptr_res; // For result of get_tag_string
+
+    char xml_buffer[1024] =
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        "<sys_prod type=\"complex\" access=\"510\">\n"
+        "  <version type=\"unsignedInt\" length=\"4\" access=\"510\">5</version>\n"
+        "  <eeprom_version type=\"unsignedShort\" length=\"2\" access=\"510\">1</eeprom_version>\n"
+        "  <product_area type=\"unsignedInt\" length=\"4\" access=\"510\">2</product_area>\n"
+        "  <game_region type=\"unsignedInt\" length=\"4\" access=\"510\">2</game_region>\n"
+        "  <ntsc_pal type=\"string\" length=\"5\" access=\"510\">NTSC</ntsc_pal>\n"
+        "  <5ghz_country_code type=\"string\" length=\"4\" access=\"510\">Q2</5ghz_country_code>\n"
+        "  <5ghz_country_code_revision type=\"unsignedByte\" length=\"1\" access=\"510\">7</5ghz_country_code_revision>\n"
+        "  <code_id type=\"string\" length=\"8\" access=\"510\">FW</code_id>\n"
+        "  <serial_id type=\"string\" length=\"12\" access=\"510\">409950593</serial_id>\n"
+        "  <model_number type=\"string\" length=\"16\" access=\"510\">WUP-101(02)</model_number>\n"
+        "</sys_prod>";
+
+    char temp_value_buffer[32];
+    const char* initial_pa = "2";
+    const char* initial_gr = "2";
+    const char* new_pa_str = "4";
+    const char* new_gr_str = "1";
+
+    const char* expected_final_xml =
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        "<sys_prod type=\"complex\" access=\"510\">\n"
+        "  <version type=\"unsignedInt\" length=\"4\" access=\"510\">5</version>\n"
+        "  <eeprom_version type=\"unsignedShort\" length=\"2\" access=\"510\">1</eeprom_version>\n"
+        "  <product_area type=\"unsignedInt\" length=\"4\" access=\"510\">4</product_area>\n"
+        "  <game_region type=\"unsignedInt\" length=\"4\" access=\"510\">1</game_region>\n"
+        "  <ntsc_pal type=\"string\" length=\"5\" access=\"510\">NTSC</ntsc_pal>\n"
+        "  <5ghz_country_code type=\"string\" length=\"4\" access=\"510\">Q2</5ghz_country_code>\n"
+        "  <5ghz_country_code_revision type=\"unsignedByte\" length=\"1\" access=\"510\">7</5ghz_country_code_revision>\n"
+        "  <code_id type=\"string\" length=\"8\" access=\"510\">FW</code_id>\n"
+        "  <serial_id type=\"string\" length=\"12\" access=\"510\">409950593</serial_id>\n"
+        "  <model_number type=\"string\" length=\"16\" access=\"510\">WUP-101(02)</model_number>\n"
+        "</sys_prod>";
+
+    // 1. Get and validate initial product_area
+    tests_run++;
+    get_ptr_res = get_tag_string(xml_buffer, "product_area", temp_value_buffer, sizeof(temp_value_buffer));
+    int pa_valid_initial = (get_ptr_res != NULL && strcmp(temp_value_buffer, initial_pa) == 0);
+    int pa_is_allowed_val = pa_valid_initial && (strcmp(temp_value_buffer, "1") == 0 || strcmp(temp_value_buffer, "2") == 0 || strcmp(temp_value_buffer, "4") == 0 || strcmp(temp_value_buffer, "119") == 0);
+    assert(pa_is_allowed_val);
+    if (pa_is_allowed_val) {
+        tests_passed++;
+    } else { printf("FAIL: Scenario - Get/Validate initial product_area. Got: '%s', Expected: '%s', Valid Check: %d\n", temp_value_buffer, initial_pa, pa_valid_initial); }
+
+    // 2. Get and validate initial game_region
+    tests_run++;
+    get_ptr_res = get_tag_string(xml_buffer, "game_region", temp_value_buffer, sizeof(temp_value_buffer));
+    int gr_valid_initial = (get_ptr_res != NULL && strcmp(temp_value_buffer, initial_gr) == 0);
+    int gr_is_allowed_val = gr_valid_initial && (strcmp(temp_value_buffer, "1") == 0 || strcmp(temp_value_buffer, "2") == 0 || strcmp(temp_value_buffer, "4") == 0 || strcmp(temp_value_buffer, "119") == 0);
+    assert(gr_is_allowed_val);
+    if (gr_is_allowed_val) {
+        tests_passed++;
+    } else { printf("FAIL: Scenario - Get/Validate initial game_region. Got: '%s', Expected: '%s', Valid Check: %d\n", temp_value_buffer, initial_gr, gr_valid_initial); }
+
+    // 3. Set new product_area
+    tests_run++;
+    op_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "product_area", new_pa_str);
+    assert(op_res == 0);
+    if (op_res == 0) {
+         tests_passed++;
+    } else { printf("FAIL: Scenario - Set new product_area to %s, got %d\n", new_pa_str, op_res); }
+
+    // 4. Set new game_region
+    tests_run++;
+    op_res = set_tag_string(xml_buffer, sizeof(xml_buffer), "game_region", new_gr_str);
+    assert(op_res == 0);
+    if (op_res == 0) {
+        tests_passed++;
+    } else { printf("FAIL: Scenario - Set new game_region to %s, got %d\n", new_gr_str, op_res); }
+
+    // 5. Verify final XML content
+    tests_run++;
+    // printf("=== Start Modified XML ===\n%s\n=== End Modified XML ===\n", xml_buffer); // For debugging
+    // printf("=== Start Expected XML ===\n%s\n=== End Expected XML ===\n", expected_final_xml); // For debugging
+    assert(strcmp(xml_buffer, expected_final_xml) == 0);
+    if (strcmp(xml_buffer, expected_final_xml) == 0) {
+        tests_passed++;
+    } else { printf("FAIL: Scenario - Final XML does not match expected.\n"); }
+
+    printf("test_xml_modification_scenario tests: %d/%d PASSED\n", tests_passed, tests_run);
+    return tests_passed == tests_run;
+}
+
 
 // Main function to run all test suites
 int main() {
@@ -271,6 +365,10 @@ int main() {
     if (!test_set_tag_string()) {
         all_suites_passed = 0;
         printf("FAIL: test_set_tag_string suite failed.\n");
+    }
+    if (!test_xml_modification_scenario()) { // Add this call
+        all_suites_passed = 0;
+        printf("FAIL: test_xml_modification_scenario suite failed.\n");
     }
 
     if (all_suites_passed) {
