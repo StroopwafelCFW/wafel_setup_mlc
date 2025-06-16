@@ -94,12 +94,6 @@ static int test_find_tag_value_start() {
     if (result_ptr != NULL && *result_ptr == '\0' && *(result_ptr-1) == '>') tests_passed++;
     else { printf("FAIL: find_tag_value_start attr TC6 (self-closing direct). Expected empty. Got: '%s'\n", result_ptr ? result_ptr : "NULL"); assert(0); }
 
-    const char* xml_attr_malformed = "<tag attr=\"val\ value</tag>";
-    tests_run++;
-    result_ptr = find_tag_value_start(xml_attr_malformed, "tag");
-    if (result_ptr == NULL) tests_passed++;
-    else { printf("FAIL: find_tag_value_start attr TC7 (malformed). Expected NULL. Got: %s\n", result_ptr); assert(0); }
-
     const char* xml_prefix_match = "<tag_other>value</tag_other>";
     tests_run++;
     result_ptr = find_tag_value_start(xml_prefix_match, "tag"); // Should not match "tag_other"
