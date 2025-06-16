@@ -1,0 +1,46 @@
+# Makefile for PC-based testing of xml_utils
+# Intended to be run from the project root directory.
+
+# Compiler and flags
+CC = gcc
+# -Isource to find xml_utils.h in the source/ directory
+CFLAGS = -Wall -Wextra -g -Isource
+LDFLAGS =
+
+# Source directory
+SOURCE_DIR = source
+
+# Source files (prefixed with source directory)
+XML_UTILS_SRC = $(SOURCE_DIR)/xml_utils.c
+TEST_SRC = $(SOURCE_DIR)/test_xml_utils.c
+
+# Object files (will be created in the same directory as sources, e.g., source/xml_utils.o)
+XML_UTILS_OBJ = $(XML_UTILS_SRC:.c=.o)
+TEST_OBJ = $(TEST_SRC:.c=.o)
+
+# Target executable (will be created in the project root)
+TEST_EXEC = test_xml_utils_pc
+
+.PHONY: all run clean
+
+all: $(TEST_EXEC)
+
+# Linking rule: uses object files from source/ to create executable in root
+$(TEST_EXEC): $(XML_UTILS_OBJ) $(TEST_OBJ)
+	@echo "Linking $(TEST_EXEC)..."
+	$(CC) $(CFLAGS) -o $(TEST_EXEC) $(XML_UTILS_OBJ) $(TEST_OBJ) $(LDFLAGS)
+	@echo "$(TEST_EXEC) built successfully."
+
+# Compilation rule for .c files in source/ to .o files in source/
+$(SOURCE_DIR)/%.o: $(SOURCE_DIR)/%.c
+	@echo "Compiling $<..."
+	$(CC) $(CFLAGS) -c $< -o $@
+
+run: all
+	@echo "Running tests..."
+	@./$(TEST_EXEC) # Assumes TEST_EXEC is in the current directory (project root)
+
+clean:
+	@echo "Cleaning up..."
+	@rm -f $(XML_UTILS_OBJ) $(TEST_OBJ) $(TEST_EXEC)
+	@echo "Done."
