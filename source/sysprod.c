@@ -79,20 +79,51 @@ int modify_sys_prod_xml(int fsa_handle, int product_area_val, int game_region_va
     }
     xml_buffer[bytes_read] = '\0'; // Safe to null-terminate
 
-    // 3. Convert int product_area and game_region to string
-    char pa_str[12];
-    char gr_str[12];
-    snprintf(pa_str, sizeof(pa_str), "%d", product_area_val);
-    snprintf(gr_str, sizeof(gr_str), "%d", game_region_val);
-
-    // 4. Set new values using XML helpers
-    if (set_tag_string(xml_buffer, "product_area", pa_str) != 0) {
+    // 3. Validate and Set Product Area
+    char current_pa_value[16];
+    if (get_tag_string(xml_buffer, "product_area", current_pa_value, sizeof(current_pa_value)) == NULL) {
+        // Failed to read current product_area or buffer too small
+        // printf("modify_sys_prod_xml: Failed to get current product_area.\n");
         freeIobuf(xml_buffer);
-        return -5;
+        return -10; // Error getting current product_area
     }
-    if (set_tag_string(xml_buffer, "game_region", gr_str) != 0) {
+    if (strcmp(current_pa_value, "1") != 0 && strcmp(current_pa_value, "2") != 0 &&
+        strcmp(current_pa_value, "4") != 0 && strcmp(current_pa_value, "119") != 0) {
+        // printf("modify_sys_prod_xml: Current product_area ('%s') is not an allowed value for modification.\n", current_pa_value);
         freeIobuf(xml_buffer);
-        return -6;
+        return -11; // Invalid current product_area value
+    }
+
+    char pa_str[12]; // Buffer for the new product_area string
+    snprintf(pa_str, sizeof(pa_str), "%d", product_area_val); // product_area_val is the new value
+    // Update call to set_tag_string with xml_buffer_total_size
+    if (set_tag_string(xml_buffer, SYS_PROD_XML_MAX_SIZE, "product_area", pa_str) != 0) {
+        // printf("modify_sys_prod_xml: Failed to set product_area in XML buffer.\n");
+        freeIobuf(xml_buffer);
+        return -5; // Set product_area error (original error code)
+    }
+
+    // 4. Validate and Set Game Region
+    char current_gr_value[16];
+    if (get_tag_string(xml_buffer, "game_region", current_gr_value, sizeof(current_gr_value)) == NULL) {
+        // printf("modify_sys_prod_xml: Failed to get current game_region.\n");
+        freeIobuf(xml_buffer);
+        return -12; // Error getting current game_region
+    }
+    if (strcmp(current_gr_value, "1") != 0 && strcmp(current_gr_value, "2") != 0 &&
+        strcmp(current_gr_value, "4") != 0 && strcmp(current_gr_value, "119") != 0) {
+        // printf("modify_sys_prod_xml: Current game_region ('%s') is not an allowed value for modification.\n", current_gr_value);
+        freeIobuf(xml_buffer);
+        return -13; // Invalid current game_region value
+    }
+
+    char gr_str[12]; // Buffer for the new game_region string
+    snprintf(gr_str, sizeof(gr_str), "%d", game_region_val); // game_region_val is the new value
+    // Update call to set_tag_string with xml_buffer_total_size
+    if (set_tag_string(xml_buffer, SYS_PROD_XML_MAX_SIZE, "game_region", gr_str) != 0) {
+        // printf("modify_sys_prod_xml: Failed to set game_region in XML buffer.\n");
+        freeIobuf(xml_buffer);
+        return -6; // Set game_region error (original error code)
     }
 
     // 5. Open file for writing (this will truncate/overwrite)
@@ -202,46 +233,87 @@ char* get_tag_string(const char* xml_content, const char* tag_name, char* buffer
         return buffer;
     }
     ptrdiff_t value_len = value_end - value_start;
-    if (value_len < 0) return NULL;
-    if (value_len >= buffer_size) {
-        memcpy(buffer, value_start, buffer_size - 1);
-        buffer[buffer_size - 1] = '\0';
-    } else {
-        memcpy(buffer, value_start, value_len);
-        buffer[value_len] = '\0';
+    if (value_len < 0) { // Should not happen with valid XML and strstr logic
+        // buffer[0] = '\0'; // Already done at the beginning of the function
+        return NULL;
     }
+
+    // Check if the value (excluding null terminator) can fit in the buffer.
+    // buffer_size includes space for the null terminator.
+    // So, value_len must be less than buffer_size.
+    if (value_len >= buffer_size) {
+        // Value is too large for the provided buffer.
+        // As per new requirement, return NULL instead of truncating.
+        // The initial buffer[0] = '\0' at the function start ensures it's a safe empty string.
+        return NULL;
+    }
+
+    // If we reach here, value_len < buffer_size, so it fits.
+    memcpy(buffer, value_start, value_len);
+    buffer[value_len] = '\0';
     return buffer;
 }
 
-int set_tag_string(char* xml_content, const char* tag_name, const char* new_value) {
-    if (!xml_content || !tag_name || !new_value) {
-        return -1;
+// Note: The call sites for this function will need to be updated to pass xml_buffer_total_size.
+// That change is part of a subsequent subtask.
+int set_tag_string(char* xml_content, size_t xml_buffer_total_size, const char* tag_name, const char* new_value) {
+    if (!xml_content || xml_buffer_total_size == 0 || !tag_name || !new_value) {
+        return -1; // Invalid parameters
     }
-    char* current_xml_content = xml_content;
-    const char* value_start_const = find_tag_value_start(current_xml_content, tag_name);
+
+    // Cast needed as find_tag_value_start expects const char*
+    // but we need a mutable pointer into xml_content if we are to modify it.
+    // The actual modification happens after finding all necessary points.
+    const char* value_start_const = find_tag_value_start(xml_content, tag_name);
     if (!value_start_const) {
-        return -1;
+        return -1; // Tag not found
     }
-    char* value_start = current_xml_content + (value_start_const - current_xml_content);
-    char close_tag[128];
+    // Calculate the mutable pointer 'value_start' from the const 'value_start_const'
+    // by finding its offset from the beginning of xml_content.
+    char* value_start = xml_content + (value_start_const - xml_content);
+
+    char close_tag[128]; // Assuming tag names are reasonably short
     int written = snprintf(close_tag, sizeof(close_tag), "</%s>", tag_name);
     if (written < 0 || (size_t)written >= sizeof(close_tag)) {
-        return -1;
+        return -1; // Error constructing close_tag or tag_name too long
     }
+
     char* value_end = strstr(value_start, close_tag);
     if (!value_end) {
-        return -1;
+        return -1; // Closing tag not found
     }
+
     size_t old_value_len = value_end - value_start;
     size_t new_value_len = strlen(new_value);
     ptrdiff_t len_diff = new_value_len - old_value_len;
-    if (len_diff != 0) {
-        char* rest_of_xml_start = value_end;
-        size_t rest_len = strlen(rest_of_xml_start) + 1;
-        char* dest = value_start + new_value_len;
-        char* src = rest_of_xml_start;
-        memmove(dest, src, rest_len);
+
+    // Check for potential overflow before memmove if the new value is larger
+    if (len_diff > 0) {
+        size_t current_total_xml_len = strlen(xml_content); // Length of current XML string content
+        size_t projected_new_total_xml_len = current_total_xml_len + len_diff;
+
+        // The projected length is the string length. Add 1 for the null terminator.
+        // This sum must be <= xml_buffer_total_size.
+        if ((projected_new_total_xml_len + 1) > xml_buffer_total_size) {
+            // Not enough space in the buffer for the expanded XML + null terminator.
+            // printf("set_tag_string: Error - new value would overflow XML buffer.\n");
+            // printf("Current len: %zu, diff: %td, projected len+null: %zu, buffer total size: %zu\n",
+            //        current_total_xml_len, len_diff, projected_new_total_xml_len + 1, xml_buffer_total_size);
+            return -2; // Specific error code for overflow
+        }
     }
+
+    // If len_diff is not 0 (can be positive or negative), shift the rest of the XML content
+    if (len_diff != 0) {
+        char* rest_of_xml_start = value_end; // This is the start of "</tag_name>"
+        size_t rest_len = strlen(rest_of_xml_start) + 1; // Include null terminator in length to move
+
+        char* dest = value_start + new_value_len; // Point after where the new value will be
+        memmove(dest, rest_of_xml_start, rest_len);
+    }
+
+    // Copy the new value into place
     memcpy(value_start, new_value, new_value_len);
-    return 0;
+
+    return 0; // Success
 }
