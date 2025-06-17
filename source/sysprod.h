@@ -2,6 +2,7 @@
 #include <assert.h>
 
 #include <wafel/ios/svc.h>
+#include <stddef.h> // For size_t
 
 // These structs were taken directly from Garys recovery_menu
 typedef enum
@@ -42,3 +43,6 @@ static_assert(sizeof(MCPSysProdSettings) == 0x46, "MCPSysProdSettings: different
 
 int MCP_GetSysProdSettings(int fd, MCPSysProdSettings* out_sysProdSettings);
 int MCP_SetSysProdSettings(int fd, const MCPSysProdSettings* sysProdSettings);
+
+// Function to modify sys_prod.xml directly via FSA
+int modify_sys_prod_xml(int fsa_handle, int product_area, int game_region);

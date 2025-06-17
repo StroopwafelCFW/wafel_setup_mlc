@@ -217,26 +217,61 @@ void fix_region(int fsaHandle, int logHandle){
 
     // Massive props to Gary
     int mcp_handle = iosOpen("/dev/mcp", 0);
+    if (mcp_handle <= 0) {
+        // Use a specific error code for MCP open failure if available, or a general one.
+        // update_error_state expects a non-zero value for error, mcp_handle itself might be negative.
+        update_error_state(mcp_handle ? mcp_handle : -1, 2);
+        debug_printf("Failed to open MCP: %X\n", mcp_handle);
+        log_printf(fsaHandle, logHandle, "Failed to open MCP: %X\n", mcp_handle);
+        return; // MCP handle failed to open, nothing more to do here
+    }
 
     MCPSysProdSettings sysProdSettings;
     int ret = MCP_GetSysProdSettings(mcp_handle, &sysProdSettings);
     debug_printf("MCP_GetSysProdSettings: %X\n", ret);
     if (ret != 0) {
       // handle failure to not corrupt
-      update_error_state(0, 1);
+      update_error_state(ret, 1); // Use actual error code from MCP_GetSysProdSettings
       debug_printf("MCP_GetSysProdSettings failed: %X. Skipping setting sys_prod values.\n", ret);
       log_printf(fsaHandle, logHandle, "MCP_GetSysProdSettings failed: %X. Skipping setting sys_prod values.\n", ret);
+      iosClose(mcp_handle); // Close mcp_handle before returning
       return;
     }
 
     if(sysProdSettings.product_area == coldbootRegion && 
-        sysProdSettings.game_region == sysProdSettings.product_area)
+        sysProdSettings.game_region == sysProdSettings.product_area) {
+        debug_printf("Region already matches. Product: %X, Game: %X, Coldboot: %X\n",
+            sysProdSettings.product_area, sysProdSettings.game_region, coldbootRegion);
+        log_printf(fsaHandle, logHandle, "Region already matches (P:%X, G:%X, C:%X).\n",
+            sysProdSettings.product_area, sysProdSettings.game_region, coldbootRegion);
+        iosClose(mcp_handle); // Close mcp_handle before returning
         return; //Region already matches
+    }
 
     sysProdSettings.game_region = sysProdSettings.product_area = coldbootRegion;
     ret = MCP_SetSysProdSettings(mcp_handle, &sysProdSettings);
     debug_printf("Set Region to %X: %X\n", sysProdSettings.game_region, ret);
-    log_printf(fsaHandle, logHandle, "Set region to %X:, %X\n", sysProdSettings.game_region, ret);
+    log_printf(fsaHandle, logHandle, "Set region to %X: %X\n", sysProdSettings.game_region, ret);
+
+    if (ret != 0) { // If MCP_SetSysProdSettings failed
+        debug_printf("MCP_SetSysProdSettings failed (ret: %X). Attempting XML fallback...\n", ret);
+        log_printf(fsaHandle, logHandle, "MCP_SetSysProdSettings failed (ret: %d). Attempting XML fallback...\n", ret);
+
+        int fallback_ret = modify_sys_prod_xml(fsaHandle, sysProdSettings.product_area, sysProdSettings.game_region);
+
+        if (fallback_ret == 0) {
+            debug_printf("XML modification fallback SUCCEEDED.\n");
+            log_printf(fsaHandle, logHandle, "XML modification fallback SUCCEEDED.\n");
+        } else {
+            debug_printf("XML modification fallback FAILED (ret: %X).\n", fallback_ret);
+            log_printf(fsaHandle, logHandle, "XML modification fallback FAILED (ret: %X).\n", fallback_ret);
+            update_error_state(fallback_ret, 2);
+        }
+    }
+
+    // MCP handle is no longer needed after this point in the main execution path.
+    iosClose(mcp_handle);
+    // No mcp_handle = 0; as it's a local variable going out of scope.
 }
 
 u32 setup_main(void* arg){
