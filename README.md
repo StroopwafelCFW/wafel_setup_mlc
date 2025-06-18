@@ -33,7 +33,7 @@ make
 
 ## Replacing the MLC
 
-One way to replace the MLC on your Wii U would be to replace the 8GB / 32GB eMMC with a micro SD card. To make the replacement more convieneint I recommend Voultars [Wii-U NAND-AID - eMMC Recovery and Replacement Interposer](https://gbatemp.net/threads/wii-u-nand-aid-emmc-recovery-and-replacement-interposer-public-test.630798/). Stock IOSU supports up to 64GB MLC. If you want more, you need to to [remove this limitation](https://github.com/jan-hofmeier/wafel_unlimit_mlc).
+One way to replace the MLC on your Wii U would be to replace the 8GB / 32GB eMMC with a micro SD card. To make the replacement more convieneint you can use [MLC2SD](https://gbatemp.net/threads/mlc2sd-a-wii-u-nand-emmc-replacement-interposer.651917/).
 
 The other way is to [replace the Disc Drive with a SATA SSD/HDD](https://gbatemp.net/threads/wii-u-internal-storage-upgrades-are-possible.635629/) using a [SATA adapter](https://github.com/ashquarky/usata/). This option doesn't have size limitation other than the WFS limit of 2TB.
 
