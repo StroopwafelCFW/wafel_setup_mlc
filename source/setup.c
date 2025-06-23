@@ -255,7 +255,7 @@ void fix_region(int fsaHandle, int logHandle){
 
     if (ret != 0) { // If MCP_SetSysProdSettings failed
         debug_printf("MCP_SetSysProdSettings failed (ret: %X). Attempting XML fallback...\n", ret);
-        log_printf(fsaHandle, logHandle, "MCP_SetSysProdSettings failed (ret: %d). Attempting XML fallback...\n", ret);
+        log_printf(fsaHandle, logHandle, "MCP_SetSysProdSettings failed (ret: %X). Attempting XML fallback...\n", ret);
 
         int fallback_ret = modify_sys_prod_xml(fsaHandle, sysProdSettings.product_area, sysProdSettings.game_region);
 
@@ -263,8 +263,8 @@ void fix_region(int fsaHandle, int logHandle){
             debug_printf("XML modification fallback SUCCEEDED.\n");
             log_printf(fsaHandle, logHandle, "XML modification fallback SUCCEEDED.\n");
         } else {
-            debug_printf("XML modification fallback FAILED (ret: %X).\n", fallback_ret);
-            log_printf(fsaHandle, logHandle, "XML modification fallback FAILED (ret: %X).\n", fallback_ret);
+            debug_printf("XML modification fallback FAILED (ret: %d).\n", fallback_ret);
+            log_printf(fsaHandle, logHandle, "XML modification fallback FAILED (ret: %d).\n", fallback_ret);
             update_error_state(fallback_ret, 2);
         }
     }
