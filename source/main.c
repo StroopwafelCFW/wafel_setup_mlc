@@ -47,7 +47,7 @@ void kern_main()
     ASM_PATCH_K(0x05027D24, ".thumb\nnop\nnop\n");
 
     // Patch MCP_SetSysProdSettings debug mode check
-    ASM_PATCH_K(0x05024648, ".thumb\nnop\nnop\n");
+    ASM_T_PATCH_K(0x05024648, "nop\nnop\n");
 
     // Ignore permissions when writing settings xml
     ASM_T_PATCH_K(0x0503cc44, "nop\nnop");
