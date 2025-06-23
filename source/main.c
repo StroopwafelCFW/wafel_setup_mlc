@@ -34,6 +34,9 @@ void kern_main()
     // create all system directries if they don't exist
     ASM_T_PATCH_K(0x050155ea, "tst r2,r2\n");
 
+    // don't start PPC
+    ASM_T_PATCH_K(0x050340ee, "mov r0, #0\nnop")
+
     trampoline_t_hook_before(0x05027e9e, setup_hook);
 
     debug_printf("setup patches applied\n");
