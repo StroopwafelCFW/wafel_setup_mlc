@@ -34,6 +34,8 @@ void kern_main()
     // create all system directries if they don't exist
     ASM_T_PATCH_K(0x050155ea, "tst r2,r2\n");
 
+    trampoline_t_hook_before(0x05027e9e, setup_hook);
+
     debug_printf("setup patches applied\n");
 }
 
@@ -44,19 +46,4 @@ void mcp_main()
 {
     // Make sure relocs worked fine and mappings are good
 	debug_printf("we in setup mlc MCP %p\n", mcp_main);
-
-    // Start up setup thread
-    u8* setup_stack = (u8*) iosAllocAligned(0x0001, 0x1000, 0x20);
-    if (!setup_stack) {
-        debug_printf("ERROR: failed to allocate stack for setup thread\n");
-        return;
-    }
-    int setup_threadhand = iosCreateThread(setup_main, NULL, (u32*)(setup_stack+0x1000), 0x1000, 0x78, 1);
-    if (setup_threadhand < 0) {
-        debug_printf("ERROR: failed to create setup thread\n");
-        return;
-    }
-    int start_ret = iosStartThread(setup_threadhand);
-    debug_printf("start setup thread returned: %X\n", start_ret);
-
 }
