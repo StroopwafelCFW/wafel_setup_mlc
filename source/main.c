@@ -7,6 +7,7 @@
 #include <wafel/utils.h>
 #include <wafel/patch.h>
 #include <wafel/ios/svc.h>
+#include <wafel/trampoline.h>
 
 #include "setup.h"
 
