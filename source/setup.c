@@ -252,26 +252,9 @@ void fix_region(int fsaHandle, int logHandle){
     ret = MCP_SetSysProdSettings(mcp_handle, &sysProdSettings);
     debug_printf("Set Region to %X: %X\n", sysProdSettings.game_region, ret);
     log_printf(fsaHandle, logHandle, "Set region to %X: %X\n", sysProdSettings.game_region, ret);
+    update_error_state(ret, 2); 
 
-    if (ret != 0) { // If MCP_SetSysProdSettings failed
-        debug_printf("MCP_SetSysProdSettings failed (ret: %X). Attempting XML fallback...\n", ret);
-        log_printf(fsaHandle, logHandle, "MCP_SetSysProdSettings failed (ret: %X). Attempting XML fallback...\n", ret);
-
-        int fallback_ret = modify_sys_prod_xml(fsaHandle, sysProdSettings.product_area, sysProdSettings.game_region);
-
-        if (fallback_ret == 0) {
-            debug_printf("XML modification fallback SUCCEEDED.\n");
-            log_printf(fsaHandle, logHandle, "XML modification fallback SUCCEEDED.\n");
-        } else {
-            debug_printf("XML modification fallback FAILED (ret: %d).\n", fallback_ret);
-            log_printf(fsaHandle, logHandle, "XML modification fallback FAILED (ret: %d).\n", fallback_ret);
-            update_error_state(fallback_ret, 2);
-        }
-    }
-
-    // MCP handle is no longer needed after this point in the main execution path.
     iosClose(mcp_handle);
-    // No mcp_handle = 0; as it's a local variable going out of scope.
 }
 
 u32 setup_main(void* arg){
