@@ -49,7 +49,11 @@ void kern_main()
     // Patch MCP_SetSysProdSettings debug mode check
     ASM_PATCH_K(0x05024648, ".thumb\nnop\nnop\n");
 
-    // create all system directries if they don't exist
+    // Ignore permissions when writing settings xml
+    ASM_T_PATCH_K(0x0503cc44, "nop\nnop");
+    ASM_T_PATCH_K(0x0503cd32, "nop");
+
+    // create all system directories if they don't exist
     ASM_T_PATCH_K(0x050155ea, "tst r2,r2\n");
 
     // don't start PPC
