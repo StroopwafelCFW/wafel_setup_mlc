@@ -44,9 +44,6 @@ void kern_main()
     // Disable panic in kernel
     ASM_PATCH_K(0x08129ce0, "bx lr\n");
 
-    // Don't resume services we don't need
-    ASM_T_PATCH_K(0x050229ee, "mov r3,#34")
-
     // format MLC if needed
     ASM_PATCH_K(0x05027D24, ".thumb\nnop\nnop\n");
 
