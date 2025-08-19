@@ -15,9 +15,6 @@
 #define MAX_LOG_LINE_LENGHT 512
 #define CROSS_PROCESS_HEAP_ID 0xcaff
 
-char *folders_to_create[] = { "/vol/storage_mlc01/usr", "/vol/storage_mlc01/usr/boss", "/vol/storage_mlc01/usr/save", "/vol/storage_mlc01/usr/save/00050010",
-                     "/vol/storage_mlc01/usr/packages", "/vol/storage_mlc01/usr/tmp", NULL };
-
 
 static int log_printf(int fsaHandle, int logHandle, const char* fmt, ...){
     if(!logHandle) {
