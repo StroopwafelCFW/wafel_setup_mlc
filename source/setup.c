@@ -164,7 +164,7 @@ void install_all_titles(int fd, char *directory, int logHandle){
 
     while(!FSA_ReadDir(fd, dir, dir_entry))
     {
-        if(dir_entry->dirStat.flags & 0x80000000)
+        if(dir_entry->stat.flags & 0x80000000)
         {
             // get new dir str
             snprintf(install_dir, 0x100, "%s/%s", directory, dir_entry->name);
