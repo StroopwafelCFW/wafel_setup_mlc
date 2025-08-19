@@ -140,7 +140,7 @@ void install_all_titles(int fd, char *directory, int logHandle){
         return;
     }
 
-    directoryEntry_s *dir_entry = iosAlloc(0x00001, sizeof(directoryEntry_s));
+    FSDirectoryEntry *dir_entry = iosAlloc(0x00001, sizeof(FSDirectoryEntry));
     if(dir_entry == NULL)
     {
         update_error_state(1, 2);
@@ -254,6 +254,108 @@ void fix_region(int fsaHandle, int logHandle){
     iosClose(mcp_handle);
 }
 
+static int open_dir_e(int fsaHandle, const char *path, int *dir_handle, int logHandle, int *in_out_error_cnt){
+    int res = FSA_OpenDir(fsaHandle, path, dir_handle);
+    if (res < 0) {
+        log_printf(fsaHandle, logHandle, "OpenDir: %s: -%X\n", path, -res);
+        return 1;
+    }
+    return 0;
+}
+
+#define MAX_PATH_LENGHT 0x27F
+#define MAX_DIRECTORY_DEPTH 60
+#define LOCAL_PROCESS_HEAP_ID 0xcafe
+
+int removeRecursive(int fsaHandle, const char *base_path, int logHandle){
+    char *path = NULL;
+    int ret = -1;
+    int error_count = 0;
+
+    path = (char*) iosAlloc(LOCAL_PROCESS_HEAP_ID, MAX_PATH_LENGHT + 1);
+    if (!path) {
+        goto error;
+    }
+    strncpy(path, base_path, MAX_DIRECTORY_DEPTH);
+
+    int depth = -1;
+    int dir_stack[MAX_DIRECTORY_DEPTH] = { 0 };
+    int res=open_dir_e(fsaHandle, path, dir_stack, logHandle, &ret);
+    if(res)
+        goto error;
+    depth = 0;
+    uint32_t dir_path_len = strnlen(path, MAX_PATH_LENGHT);
+    path[dir_path_len] = '/';
+    dir_path_len++;
+    path[dir_path_len] ='\0';
+
+    ret = 0;
+    while(depth >= 0){
+        FSDirectoryEntry dir_entry;
+        log_printf(fsaHandle, logHandle, "StartReadDir: %s\n", path);
+        res = FSA_ReadDir(fsaHandle, dir_stack[depth], &dir_entry);
+        if(res < 0){
+            if(res != END_OF_DIR){
+                ret++;
+                log_printf(fsaHandle, logHandle, "ReadDir: %s: -%X\n", path, -res);
+            }
+            FSA_CloseDir(fsaHandle, dir_stack[depth]);
+            dir_stack[depth] = 0;
+            depth--;
+            do {
+                dir_path_len--;
+            } while((dir_path_len > 0) && (path[dir_path_len - 1] != '/'));
+            path[dir_path_len] = '\0';
+            continue;
+        }
+        if(dir_entry.stat.flags & DIR_ENTRY_IS_LINK)
+            continue; //skip symlinks
+        strncpy(path + dir_path_len, dir_entry.name, MAX_PATH_LENGHT);
+        if(!(dir_entry.stat.flags & DIR_ENTRY_IS_DIRECTORY)){
+            strncpy(path+dir_path_len, dir_entry.name, MAX_PATH_LENGHT - (dir_path_len + 1));
+            res = FSA_Remove(fsaHandle, path);
+            log_printf(fsaHandle, logHandle, "Removing: %s: -%X\n", path, -res);
+            if(res < 0){
+                error_count++;
+                ret = res;
+                break;
+            }
+        } else { // Directory
+            if(depth >= MAX_DIRECTORY_DEPTH){
+                log_printf(fsaHandle, logHandle, "ExceedDepth: %s: %d\n", path, depth);
+                continue;
+            }
+            res = open_dir_e(fsaHandle, path, dir_stack + depth + 1, logHandle, &ret);
+            if(res < 0){
+                ret = res;
+                break;
+            }
+            if(res){
+                path[dir_path_len] = '\0';
+                continue;
+            }
+            depth++;
+            dir_path_len = strnlen(path, MAX_PATH_LENGHT);
+            path[dir_path_len] = '/';
+            dir_path_len++;
+            path[dir_path_len] = '\0';
+        }
+    }
+
+error:
+    //TODO: close remaining directories in error case
+    for(; depth >= 0; depth--){
+        if(dir_stack[depth])
+            FSA_CloseDir(fsaHandle, dir_stack[depth]);
+    }
+
+    log_printf(fsaHandle, logHandle, "DeleteDirFinished: %s: d\n", base_path, error_count);
+
+    if(path)
+        iosFree(LOCAL_PROCESS_HEAP_ID, path);
+    return ret?ret:error_count;
+}
+
 u32 setup_main(void* arg){
 
     bool warning = 0;
@@ -284,6 +386,10 @@ u32 setup_main(void* arg){
     int ret = FSA_OpenFile(fsaHandle, "/vol/sdcard/wafel_setup_mlc.log", "w", &logHandle);
     debug_printf("Open logfile -%X\n", -ret);
     update_error_state(ret, 1);
+
+    removeRecursive(fsaHandle, "/vol/system/title/0005001B", logHandle);
+    removeRecursive(fsaHandle, "/vol/system/title/00050030", logHandle);
+    removeRecursive(fsaHandle, "/vol/system/title/0005000e", logHandle);
 
     install_all_titles(fsaHandle, "/vol/sdcard/wafel_install", logHandle);
     int flush_ret = flush_mlc(fsaHandle);
